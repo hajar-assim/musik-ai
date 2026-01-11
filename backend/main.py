@@ -52,7 +52,8 @@ def login(user_id: str):
                                 scope=SCOPE,
                                 cache_path=f".cache-{user_id}")  # token cache per user
         oauth_objects[user_id] = sp_oauth
-        auth_url = sp_oauth.get_authorize_url()
+        # Pass user_id as state parameter so we get it back in callback
+        auth_url = sp_oauth.get_authorize_url(state=user_id)
         logger.info(f"Successfully generated auth URL for user_id: {user_id}")
         return RedirectResponse(auth_url)
     except Exception as e:
