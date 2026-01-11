@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.exceptions import SpotifyException
@@ -10,7 +11,21 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(
+    title="musik-ai API",
+    description="YouTube to Spotify playlist conversion API",
+    version="1.0.0"
+)
+
+# Configure CORS
+# In production, replace ["*"] with specific frontend origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: Replace with specific origins in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # your redirect URI — must match Spotify dashboard
 REDIRECT_URI = "http://127.0.0.1:8888/callback"
