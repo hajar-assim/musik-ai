@@ -3,7 +3,7 @@ from googleapiclient.errors import HttpError
 import os
 import logging
 import re
-from .vault_client import YOUTUBE_API_KEY
+from vault_client import YOUTUBE_API_KEY
 
 # Configure logging
 logger = logging.getLogger(__name__)

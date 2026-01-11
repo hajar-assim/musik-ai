@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from spotipy.exceptions import SpotifyException
-from .vault_client import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
+from vault_client import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
 import logging
 
 # Configure logging
@@ -119,7 +119,7 @@ def convert(user_id: str, yt_playlist_id: str, playlist_name: str):
         sp_oauth = oauth_objects[user_id]
         sp = spotipy.Spotify(auth_manager=sp_oauth)
 
-        from .yt_spotify import get_youtube_playlist_videos, search_track_on_spotify
+        from yt_spotify import get_youtube_playlist_videos, search_track_on_spotify
 
         # Fetch YouTube playlist videos
         try:
