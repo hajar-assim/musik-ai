@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { musikApi } from './services/api';
-import type { ConversionResponse } from './services/api';
+import type { ConversionResponse, UserInfo } from './services/api';
 import './App.css';
 
 interface ConversionState {
@@ -10,25 +10,77 @@ interface ConversionState {
 }
 
 function App() {
-  const [userId, setUserId] = useState('');
+  const [spotifyUserId, setSpotifyUserId] = useState<string | null>(null);
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [ytPlaylistId, setYtPlaylistId] = useState('');
   const [playlistName, setPlaylistName] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [conversion, setConversion] = useState<ConversionState>({ status: 'idle' });
 
-  const handleLogin = () => {
-    if (!userId.trim()) {
-      alert('Please enter a user ID');
+  // Check for OAuth callback parameters and stored session
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get('spotify_user_id');
+    const status = params.get('status');
+    const error = params.get('error');
+
+    if (error) {
+      alert(`Authentication error: ${error}`);
+      window.history.replaceState({}, '', '/');
       return;
     }
+
+    if (userId && status === 'success') {
+      // Save to localStorage
+      localStorage.setItem('spotify_user_id', userId);
+      setSpotifyUserId(userId);
+      // Clean URL
+      window.history.replaceState({}, '', '/');
+      // Fetch user info
+      fetchUserInfo(userId);
+    } else {
+      // Check localStorage for existing session
+      const storedUserId = localStorage.getItem('spotify_user_id');
+      if (storedUserId) {
+        setSpotifyUserId(storedUserId);
+        fetchUserInfo(storedUserId);
+      }
+    }
+  }, []);
+
+  const fetchUserInfo = async (userId: string) => {
+    try {
+      const info = await musikApi.getCurrentUser(userId);
+      setUserInfo(info);
+    } catch (error: any) {
+      console.error('Failed to fetch user info:', error);
+      // If auth fails, clear session
+      if (error.response?.status === 401) {
+        handleLogout();
+      }
+    }
+  };
+
+  const handleLogin = () => {
     // Redirect to backend OAuth flow
-    window.location.href = musikApi.login(userId);
+    window.location.href = musikApi.login();
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('spotify_user_id');
+    setSpotifyUserId(null);
+    setUserInfo(null);
+    setConversion({ status: 'idle' });
   };
 
   const handleConvert = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!userId.trim() || !ytPlaylistId.trim() || !playlistName.trim()) {
+    if (!spotifyUserId) {
+      alert('Please log in with Spotify first');
+      return;
+    }
+
+    if (!ytPlaylistId.trim() || !playlistName.trim()) {
       alert('Please fill in all fields');
       return;
     }
@@ -36,7 +88,7 @@ function App() {
     setConversion({ status: 'loading' });
 
     try {
-      const result = await musikApi.convertPlaylist(userId, ytPlaylistId, playlistName);
+      const result = await musikApi.convertPlaylist(spotifyUserId, ytPlaylistId, playlistName);
       setConversion({ status: 'success', data: result });
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || error.message || 'Conversion failed';
@@ -56,108 +108,96 @@ function App() {
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-2xl p-8 mb-6">
-          {!isAuthenticated ? (
-            <div className="space-y-6">
-              <div>
-                <label htmlFor="userId" className="block text-sm font-medium text-gray-700 mb-2">
-                  User ID
-                </label>
-                <input
-                  type="text"
-                  id="userId"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  placeholder="Enter a unique user ID"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                />
-                <p className="mt-2 text-sm text-gray-500">
-                  Choose any ID to identify your session (e.g., your name or email)
-                </p>
-              </div>
-
+        {!spotifyUserId ? (
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="text-center space-y-6">
+              <p className="text-lg text-gray-700">
+                Connect your Spotify account to get started
+              </p>
               <button
                 onClick={handleLogin}
                 className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-105"
               >
                 Login with Spotify
               </button>
-
-              <button
-                onClick={() => setIsAuthenticated(true)}
-                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-lg transition duration-200"
-              >
-                Skip (for testing - assumes already authenticated)
-              </button>
             </div>
-          ) : (
-            <form onSubmit={handleConvert} className="space-y-6">
-              <div>
-                <label htmlFor="userId-convert" className="block text-sm font-medium text-gray-700 mb-2">
-                  User ID
-                </label>
-                <input
-                  type="text"
-                  id="userId-convert"
-                  value={userId}
-                  onChange={(e) => setUserId(e.target.value)}
-                  placeholder="Enter your user ID"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                  required
-                />
+          </div>
+        ) : (
+          <>
+            {/* User Info */}
+            {userInfo && (
+              <div className="bg-white rounded-2xl shadow-2xl p-6 mb-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    {userInfo.images?.[0]?.url && (
+                      <img
+                        src={userInfo.images[0].url}
+                        alt="Profile"
+                        className="w-12 h-12 rounded-full"
+                      />
+                    )}
+                    <div>
+                      <p className="font-semibold text-gray-900">{userInfo.display_name}</p>
+                      <p className="text-sm text-gray-500">{userInfo.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleLogout}
+                    className="text-sm text-gray-600 hover:text-gray-800 underline"
+                  >
+                    Logout
+                  </button>
+                </div>
               </div>
+            )}
 
-              <div>
-                <label htmlFor="ytPlaylistId" className="block text-sm font-medium text-gray-700 mb-2">
-                  YouTube Playlist ID
-                </label>
-                <input
-                  type="text"
-                  id="ytPlaylistId"
-                  value={ytPlaylistId}
-                  onChange={(e) => setYtPlaylistId(e.target.value)}
-                  placeholder="e.g., PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                  required
-                />
-                <p className="mt-2 text-sm text-gray-500">
-                  Find this in the YouTube playlist URL after "list="
-                </p>
-              </div>
+            {/* Conversion Form */}
+            <div className="bg-white rounded-2xl shadow-2xl p-8 mb-6">
+              <form onSubmit={handleConvert} className="space-y-6">
+                <div>
+                  <label htmlFor="ytPlaylistId" className="block text-sm font-medium text-gray-700 mb-2">
+                    YouTube Playlist ID
+                  </label>
+                  <input
+                    type="text"
+                    id="ytPlaylistId"
+                    value={ytPlaylistId}
+                    onChange={(e) => setYtPlaylistId(e.target.value)}
+                    placeholder="e.g., PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    required
+                  />
+                  <p className="mt-2 text-sm text-gray-500">
+                    Find this in the YouTube playlist URL after "list="
+                  </p>
+                </div>
 
-              <div>
-                <label htmlFor="playlistName" className="block text-sm font-medium text-gray-700 mb-2">
-                  Spotify Playlist Name
-                </label>
-                <input
-                  type="text"
-                  id="playlistName"
-                  value={playlistName}
-                  onChange={(e) => setPlaylistName(e.target.value)}
-                  placeholder="e.g., My Converted Playlist"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-                  required
-                />
-              </div>
+                <div>
+                  <label htmlFor="playlistName" className="block text-sm font-medium text-gray-700 mb-2">
+                    Spotify Playlist Name
+                  </label>
+                  <input
+                    type="text"
+                    id="playlistName"
+                    value={playlistName}
+                    onChange={(e) => setPlaylistName(e.target.value)}
+                    placeholder="e.g., My Converted Playlist"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+                    required
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={conversion.status === 'loading'}
-                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed"
-              >
-                {conversion.status === 'loading' ? 'Converting...' : 'Convert Playlist'}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsAuthenticated(false)}
-                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg transition duration-200"
-              >
-                Back to Login
-              </button>
-            </form>
-          )}
-        </div>
+                <button
+                  type="submit"
+                  disabled={conversion.status === 'loading'}
+                  className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed"
+                >
+                  {conversion.status === 'loading' ? 'Converting...' : 'Convert Playlist'}
+                </button>
+              </form>
+            </div>
+          </>
+        )}
 
         {/* Loading Indicator */}
         {conversion.status === 'loading' && (

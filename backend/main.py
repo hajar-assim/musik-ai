@@ -6,6 +6,7 @@ from spotipy.oauth2 import SpotifyOAuth
 from spotipy.exceptions import SpotifyException
 from vault_client import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
 import logging
+import uuid
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +19,6 @@ app = FastAPI(
 )
 
 # Configure CORS
-# In production, replace ["*"] with specific frontend origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # TODO: Replace with specific origins in production
@@ -27,97 +27,145 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# your redirect URI — must match Spotify dashboard
+# Redirect URI — must match Spotify dashboard
 REDIRECT_URI = "http://127.0.0.1:8888/callback"
+FRONTEND_URL = "http://localhost:5173"
 
-# scope required to modify playlists
+# Scope required to modify playlists
 SCOPE = "playlist-modify-private playlist-modify-public"
 
-# temporary in-memory store for OAuth objects per user (for demo purposes)
-oauth_objects = {}
+# Store OAuth sessions by session_id
+oauth_sessions = {}
+# Store authenticated users by spotify_user_id
+authenticated_users = {}
+
 
 @app.get("/login")
-def login(user_id: str):
+def login():
     """
-    Step 1: generate Spotify auth URL for a user
+    Step 1: Initiate Spotify OAuth flow
     """
-    if not user_id or not user_id.strip():
-        raise HTTPException(status_code=400, detail="user_id is required and cannot be empty")
-
     try:
-        logger.info(f"Initiating login for user_id: {user_id}")
-        sp_oauth = SpotifyOAuth(client_id=SPOTIFY_CLIENT_ID,
-                                client_secret=SPOTIFY_CLIENT_SECRET,
-                                redirect_uri=REDIRECT_URI,
-                                scope=SCOPE,
-                                cache_path=f".cache-{user_id}")  # token cache per user
-        oauth_objects[user_id] = sp_oauth
-        # Pass user_id as state parameter so we get it back in callback
-        auth_url = sp_oauth.get_authorize_url(state=user_id)
-        logger.info(f"Successfully generated auth URL for user_id: {user_id}")
+        # Generate a unique session ID
+        session_id = str(uuid.uuid4())
+
+        logger.info(f"Initiating login with session_id: {session_id}")
+
+        sp_oauth = SpotifyOAuth(
+            client_id=SPOTIFY_CLIENT_ID,
+            client_secret=SPOTIFY_CLIENT_SECRET,
+            redirect_uri=REDIRECT_URI,
+            scope=SCOPE,
+            cache_path=f".cache-{session_id}"
+        )
+
+        oauth_sessions[session_id] = sp_oauth
+
+        # Pass session_id as state so we can retrieve it in callback
+        auth_url = sp_oauth.get_authorize_url(state=session_id)
+        logger.info(f"Generated auth URL for session: {session_id}")
+
         return RedirectResponse(auth_url)
     except Exception as e:
-        logger.error(f"Error during login for user_id {user_id}: {str(e)}")
+        logger.error(f"Error during login: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to initiate login: {str(e)}")
 
 
 @app.get("/callback")
-def callback(request: Request, code: str = None, state: str = None, error: str = None):
+def callback(code: str = None, state: str = None, error: str = None):
     """
-    Step 2: Spotify redirects here after user login
+    Step 2: Spotify redirects here after user authorizes
     """
     if error:
         logger.error(f"Spotify OAuth error: {error}")
-        raise HTTPException(status_code=400, detail=f"Spotify authorization failed: {error}")
+        return RedirectResponse(f"{FRONTEND_URL}?error={error}")
 
-    if not code:
-        raise HTTPException(status_code=400, detail="Authorization code is missing")
+    if not code or not state:
+        return RedirectResponse(f"{FRONTEND_URL}?error=missing_parameters")
 
-    if not state:
-        raise HTTPException(status_code=400, detail="State parameter (user_id) is missing")
+    session_id = state
 
-    user_id = state  # pass user_id via state if needed
-
-    if user_id not in oauth_objects:
-        raise HTTPException(status_code=400, detail=f"No OAuth session found for user_id: {user_id}")
+    if session_id not in oauth_sessions:
+        return RedirectResponse(f"{FRONTEND_URL}?error=invalid_session")
 
     try:
-        logger.info(f"Processing OAuth callback for user_id: {user_id}")
-        sp_oauth = oauth_objects[user_id]
+        logger.info(f"Processing OAuth callback for session: {session_id}")
+        sp_oauth = oauth_sessions[session_id]
+
+        # Exchange code for access token
         token_info = sp_oauth.get_access_token(code)
-        # token_info contains access_token, refresh_token, expires_in
-        logger.info(f"Successfully authorized user_id: {user_id}")
-        return {"status": "authorized", "user_id": user_id}
+
+        # Get Spotify user info
+        sp = spotipy.Spotify(auth_manager=sp_oauth)
+        user_info = sp.current_user()
+        spotify_user_id = user_info["id"]
+
+        # Store the OAuth session by Spotify user ID
+        authenticated_users[spotify_user_id] = sp_oauth
+
+        # Clean up the temporary session
+        del oauth_sessions[session_id]
+
+        logger.info(f"Successfully authorized Spotify user: {spotify_user_id}")
+
+        # Redirect back to frontend with success
+        return RedirectResponse(f"{FRONTEND_URL}?spotify_user_id={spotify_user_id}&status=success")
+
     except Exception as e:
-        logger.error(f"Error during OAuth callback for user_id {user_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to complete authorization: {str(e)}")
+        logger.error(f"Error during OAuth callback: {str(e)}")
+        return RedirectResponse(f"{FRONTEND_URL}?error=auth_failed")
+
+
+@app.get("/me")
+def get_current_user(spotify_user_id: str):
+    """
+    Get current authenticated user info
+    """
+    if spotify_user_id not in authenticated_users:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        sp_oauth = authenticated_users[spotify_user_id]
+        sp = spotipy.Spotify(auth_manager=sp_oauth)
+        user_info = sp.current_user()
+
+        return {
+            "id": user_info["id"],
+            "display_name": user_info.get("display_name", user_info["id"]),
+            "email": user_info.get("email"),
+            "images": user_info.get("images", [])
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user info: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch user info")
 
 
 @app.get("/convert")
-def convert(user_id: str, yt_playlist_id: str, playlist_name: str):
+def convert(spotify_user_id: str, yt_playlist_id: str, playlist_name: str):
     """
-    Step 3: convert YouTube playlist to Spotify using the authorized token
+    Convert YouTube playlist to Spotify
     """
     # Validate inputs
-    if not user_id or not user_id.strip():
-        raise HTTPException(status_code=400, detail="user_id is required and cannot be empty")
+    if not spotify_user_id or not spotify_user_id.strip():
+        raise HTTPException(status_code=400, detail="spotify_user_id is required")
 
     if not yt_playlist_id or not yt_playlist_id.strip():
-        raise HTTPException(status_code=400, detail="yt_playlist_id is required and cannot be empty")
+        raise HTTPException(status_code=400, detail="yt_playlist_id is required")
 
     if not playlist_name or not playlist_name.strip():
-        raise HTTPException(status_code=400, detail="playlist_name is required and cannot be empty")
+        raise HTTPException(status_code=400, detail="playlist_name is required")
 
-    # Check if user is authorized
-    if user_id not in oauth_objects:
+    # Check if user is authenticated
+    if spotify_user_id not in authenticated_users:
         raise HTTPException(
             status_code=401,
-            detail=f"User {user_id} is not authorized. Please complete the login flow first."
+            detail="Not authenticated. Please log in with Spotify first."
         )
 
     try:
-        logger.info(f"Starting conversion for user_id: {user_id}, YouTube playlist: {yt_playlist_id}")
-        sp_oauth = oauth_objects[user_id]
+        logger.info(f"Starting conversion for Spotify user: {spotify_user_id}, YouTube playlist: {yt_playlist_id}")
+
+        sp_oauth = authenticated_users[spotify_user_id]
         sp = spotipy.Spotify(auth_manager=sp_oauth)
 
         from yt_spotify import get_youtube_playlist_videos, search_track_on_spotify
@@ -160,8 +208,7 @@ def convert(user_id: str, yt_playlist_id: str, playlist_name: str):
 
         # Create Spotify playlist
         try:
-            current_user_id = sp.current_user()["id"]
-            playlist = sp.user_playlist_create(user=current_user_id, name=playlist_name)
+            playlist = sp.user_playlist_create(user=spotify_user_id, name=playlist_name)
             sp.playlist_add_items(playlist_id=playlist["id"], items=track_uris)
             logger.info(f"Successfully created Spotify playlist '{playlist_name}' with {len(track_uris)} tracks")
         except SpotifyException as e:
@@ -179,11 +226,10 @@ def convert(user_id: str, yt_playlist_id: str, playlist_name: str):
             "total_videos": len(video_titles),
             "matched_tracks": len(track_uris),
             "failed_matches": len(failed_matches),
-            "failed_match_titles": failed_matches[:10] if failed_matches else []  # Show first 10 failed matches
+            "failed_match_titles": failed_matches[:10] if failed_matches else []
         }
     except HTTPException:
-        # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
-        logger.error(f"Unexpected error during conversion for user_id {user_id}: {str(e)}")
+        logger.error(f"Unexpected error during conversion: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")

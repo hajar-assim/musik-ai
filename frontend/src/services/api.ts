@@ -18,30 +18,42 @@ export interface ConversionResponse {
   failed_match_titles: string[];
 }
 
-export interface AuthResponse {
-  status: string;
-  user_id: string;
+export interface UserInfo {
+  id: string;
+  display_name: string;
+  email?: string;
+  images: Array<{ url: string }>;
 }
 
 export const musikApi = {
   /**
    * Initiate Spotify OAuth login flow
    */
-  login: (userId: string): string => {
-    return `${API_BASE_URL}/login?user_id=${encodeURIComponent(userId)}`;
+  login: (): string => {
+    return `${API_BASE_URL}/login`;
+  },
+
+  /**
+   * Get current user info
+   */
+  getCurrentUser: async (spotifyUserId: string): Promise<UserInfo> => {
+    const response = await api.get<UserInfo>('/me', {
+      params: { spotify_user_id: spotifyUserId },
+    });
+    return response.data;
   },
 
   /**
    * Convert YouTube playlist to Spotify
    */
   convertPlaylist: async (
-    userId: string,
+    spotifyUserId: string,
     ytPlaylistId: string,
     playlistName: string
   ): Promise<ConversionResponse> => {
     const response = await api.get<ConversionResponse>('/convert', {
       params: {
-        user_id: userId,
+        spotify_user_id: spotifyUserId,
         yt_playlist_id: ytPlaylistId,
         playlist_name: playlistName,
       },
