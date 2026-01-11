@@ -72,6 +72,27 @@ function App() {
     setConversion({ status: 'idle' });
   };
 
+  const extractPlaylistId = (input: string): string => {
+    // If it's already just an ID (starts with PL), return it
+    if (input.startsWith('PL')) {
+      return input;
+    }
+
+    // Try to extract from URL
+    try {
+      const url = new URL(input);
+      const listParam = url.searchParams.get('list');
+      if (listParam) {
+        return listParam;
+      }
+    } catch {
+      // Not a valid URL, might be just an ID
+    }
+
+    // Return original input if we couldn't extract
+    return input;
+  };
+
   const handleConvert = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -88,7 +109,9 @@ function App() {
     setConversion({ status: 'loading' });
 
     try {
-      const result = await musikApi.convertPlaylist(spotifyUserId, ytPlaylistId, playlistName);
+      // Extract playlist ID from URL if needed
+      const playlistId = extractPlaylistId(ytPlaylistId.trim());
+      const result = await musikApi.convertPlaylist(spotifyUserId, playlistId, playlistName);
       setConversion({ status: 'success', data: result });
     } catch (error: any) {
       const errorMessage = error.response?.data?.detail || error.message || 'Conversion failed';
@@ -156,19 +179,19 @@ function App() {
               <form onSubmit={handleConvert} className="space-y-6">
                 <div>
                   <label htmlFor="ytPlaylistId" className="block text-sm font-medium text-gray-700 mb-2">
-                    YouTube Playlist ID
+                    YouTube Playlist URL or ID
                   </label>
                   <input
                     type="text"
                     id="ytPlaylistId"
                     value={ytPlaylistId}
                     onChange={(e) => setYtPlaylistId(e.target.value)}
-                    placeholder="e.g., PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf"
+                    placeholder="Paste full YouTube URL or just the playlist ID"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
                     required
                   />
                   <p className="mt-2 text-sm text-gray-500">
-                    Find this in the YouTube playlist URL after "list="
+                    You can paste the full YouTube URL or just the playlist ID
                   </p>
                 </div>
 
