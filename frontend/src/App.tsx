@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { musikApi, ConversionResponse } from './services/api';
+import { musikApi } from './services/api';
+import type { ConversionResponse } from './services/api';
 import './App.css';
 
 interface ConversionState {
