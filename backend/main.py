@@ -257,22 +257,54 @@ def get_recommendations(spotify_user_id: str, track_uris: str):
         if len(track_ids) < 1:
             raise HTTPException(status_code=400, detail="At least 1 seed track is required for recommendations")
 
-        # Get recommendations from Spotify
-        # Try without market first, then fall back to user's market if needed
-        try:
-            logger.info("Attempting to get recommendations without market parameter")
-            recommendations = sp.recommendations(seed_tracks=track_ids, limit=15)
-        except SpotifyException as market_error:
-            # Try with user's market from their profile
-            logger.warning(f"Recommendations failed without market: {market_error}. Trying with user market...")
+        # Verify tracks exist and are accessible
+        logger.info("Verifying tracks exist before getting recommendations")
+        valid_track_ids = []
+        for track_id in track_ids:
             try:
-                user_profile = sp.current_user()
-                user_market = user_profile.get('country', 'US')
-                logger.info(f"Using user market: {user_market}")
-                recommendations = sp.recommendations(seed_tracks=track_ids, limit=15, market=user_market)
+                track_info = sp.track(track_id)
+                if track_info:
+                    valid_track_ids.append(track_id)
+                    logger.info(f"✓ Valid track: {track_info['name']} by {track_info['artists'][0]['name']}")
+            except SpotifyException as e:
+                logger.warning(f"✗ Invalid or unavailable track ID {track_id}: {e}")
+                continue
+            except Exception as e:
+                logger.warning(f"✗ Error checking track {track_id}: {e}")
+                continue
+
+        if not valid_track_ids:
+            raise HTTPException(status_code=400, detail="None of the provided tracks are valid or accessible")
+
+        logger.info(f"Using {len(valid_track_ids)} valid tracks for recommendations: {valid_track_ids}")
+
+        # Get user's market for better recommendations
+        try:
+            user_profile = sp.current_user()
+            user_market = user_profile.get('country', 'US')
+            logger.info(f"User market: {user_market}")
+        except Exception as e:
+            logger.warning(f"Could not get user market: {e}. Using US as default")
+            user_market = 'US'
+
+        # Get recommendations from Spotify
+        try:
+            logger.info(f"Calling sp.recommendations(seed_tracks={valid_track_ids}, limit=15, market={user_market})")
+            recommendations = sp.recommendations(seed_tracks=valid_track_ids, limit=15, market=user_market)
+            logger.info(f"Successfully got recommendations: {recommendations.get('tracks', [])[:3]}")  # Log first 3
+        except SpotifyException as e:
+            logger.error(f"SpotifyException: {e}")
+            logger.error(f"HTTP Status: {e.http_status}, Code: {e.code}, Message: {e.msg}")
+            # Try without market as last resort
+            logger.info("Retrying without market parameter")
+            try:
+                recommendations = sp.recommendations(seed_tracks=valid_track_ids, limit=15)
             except Exception as retry_error:
-                logger.error(f"Recommendations failed with market parameter: {retry_error}")
-                raise
+                logger.error(f"Retry also failed: {retry_error}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Spotify recommendations unavailable. This might be a region or API access issue. Error: {e.msg or str(e)}"
+                )
 
         recommended_tracks = []
         for track in recommendations['tracks']:

@@ -178,23 +178,36 @@ function App() {
       const matchedUris = matchResult.matched_tracks.join(",");
 
       // Step 2: Get AI recommendations
-      const recommendations = await musikApi.getRecommendations(
-        spotifyUserId,
-        matchedUris
-      );
+      try {
+        const recommendations = await musikApi.getRecommendations(
+          spotifyUserId,
+          matchedUris
+        );
 
-      // Step 3: Show recommendations UI
-      setConversion({
-        status: "recommendations",
-        matchedTracks: matchResult.matched_tracks,
-        recommendations: recommendations.recommendations,
-        selectedRecommendations: new Set(),
-      });
+        // Step 3: Show recommendations UI
+        setConversion({
+          status: "recommendations",
+          matchedTracks: matchResult.matched_tracks,
+          recommendations: recommendations.recommendations,
+          selectedRecommendations: new Set(),
+        });
+      } catch (recError: any) {
+        // If recommendations fail, offer to skip them
+        const recErrorMessage =
+          recError.response?.data?.detail ||
+          recError.message ||
+          "Failed to get recommendations";
+        setConversion({
+          status: "error",
+          error: `${recErrorMessage}\n\nYou can skip recommendations and create the playlist with just the matched tracks.`,
+          matchedTracks: matchResult.matched_tracks,
+        });
+      }
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.detail ||
         error.message ||
-        "Failed to fetch recommendations";
+        "Failed to match tracks";
       setConversion({ status: "error", error: errorMessage });
     }
   };
@@ -611,15 +624,26 @@ function App() {
                     <h3 className="text-2xl font-bold text-falcon mb-2">
                       Conversion Failed
                     </h3>
-                    <p className="text-falcon mb-6 break-words overflow-wrap-anywhere">
+                    <p className="text-falcon mb-6 break-words overflow-wrap-anywhere whitespace-pre-line">
                       {conversion.error}
                     </p>
-                    <button
-                      onClick={() => setConversion({ status: "idle" })}
-                      className="bg-falcon hover:bg-pharlap text-cararra font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-md"
-                    >
-                      Try Again
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setConversion({ status: "idle" })}
+                        className="bg-falcon hover:bg-pharlap text-cararra font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-md"
+                      >
+                        Try Again
+                      </button>
+                      {conversion.matchedTracks &&
+                        conversion.matchedTracks.length > 0 && (
+                          <button
+                            onClick={handleCreatePlaylist}
+                            className="bg-chambray hover:bg-waikawa text-cararra font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-md"
+                          >
+                            Skip Recommendations & Create Playlist
+                          </button>
+                        )}
+                    </div>
                   </div>
                 </div>
               </div>
