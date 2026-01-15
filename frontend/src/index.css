@@ -1,1 +1,26 @@
 @import "tailwindcss";
+
+/*
+  To use Hoboken Serial font, place your font files in public/fonts/ and uncomment:
+
+  @font-face {
+    font-family: 'Hoboken Serial';
+    src: url('/fonts/HobokenSerial-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+  }
+
+  @font-face {
+    font-family: 'Hoboken Serial';
+    src: url('/fonts/HobokenSerial-Medium.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+  }
+
+  @font-face {
+    font-family: 'Hoboken Serial';
+    src: url('/fonts/HobokenSerial-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+  }
+*/
