@@ -372,9 +372,12 @@ function App() {
           <>
             {/* Conversion Form */}
             <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8 mb-6">
-              <h2 className="text-2xl font-bold text-chambray mb-6">
+              <h2 className="text-2xl font-bold text-chambray mb-3">
                 Convert Playlist
               </h2>
+              <p className="text-falcon mb-6 text-sm leading-relaxed">
+                Enter a YouTube playlist ID to convert it to Spotify. We'll match the tracks and give you AI-powered recommendations to discover similar music you'll love.
+              </p>
 
               <form onSubmit={handleConvert} className="space-y-6">
                 <div>
