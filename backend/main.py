@@ -127,6 +127,44 @@ def get_current_user(spotify_user_id: str):
         raise HTTPException(status_code=500, detail="Failed to fetch user info")
 
 
+@app.get("/playlists")
+def get_user_playlists(spotify_user_id: str):
+    """Get user's Spotify playlists"""
+    if spotify_user_id not in authenticated_users:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        sp_oauth = authenticated_users[spotify_user_id]
+        sp = spotipy.Spotify(auth_manager=sp_oauth)
+
+        playlists = []
+        results = sp.current_user_playlists(limit=50)
+
+        while results:
+            for item in results['items']:
+                playlists.append({
+                    'id': item['id'],
+                    'name': item['name'],
+                    'tracks_count': item['tracks']['total'],
+                    'image': item['images'][0]['url'] if item['images'] else None,
+                    'external_url': item['external_urls']['spotify']
+                })
+
+            if results['next']:
+                results = sp.next(results)
+            else:
+                results = None
+
+        logger.info(f"Fetched {len(playlists)} playlists")
+        return {
+            'status': 'success',
+            'playlists': playlists
+        }
+    except Exception as e:
+        logger.error(f"Error fetching playlists: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch playlists")
+
+
 @app.get("/match-tracks")
 def match_tracks(spotify_user_id: str, yt_playlist_id: str):
     """Match YouTube playlist tracks to Spotify"""
@@ -247,6 +285,117 @@ def get_recommendations(spotify_user_id: str, track_uris: str):
         raise
     except Exception as e:
         logger.error(f"Error getting recommendations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/enhance-playlist")
+def get_playlist_recommendations(spotify_user_id: str, playlist_id: str):
+    """Get AI recommendations for an existing playlist"""
+    if not spotify_user_id or not playlist_id:
+        raise HTTPException(status_code=400, detail="Missing required parameters")
+
+    if spotify_user_id not in authenticated_users:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        sp_oauth = authenticated_users[spotify_user_id]
+        sp = spotipy.Spotify(auth_manager=sp_oauth)
+
+        # Fetch playlist tracks
+        results = sp.playlist_tracks(playlist_id, limit=50)
+        tracks = results['items']
+
+        while results['next']:
+            results = sp.next(results)
+            tracks.extend(results['items'])
+
+        # Extract track info for LLM
+        track_info_list = []
+        for item in tracks[:20]:
+            if item['track'] and item['track']['name']:
+                track_info_list.append({
+                    'name': item['track']['name'],
+                    'artist': item['track']['artists'][0]['name']
+                })
+
+        if not track_info_list:
+            raise HTTPException(status_code=400, detail="Playlist is empty")
+
+        # Get LLM recommendations
+        llm_recommendations = get_llm_recommendations(track_info_list)
+        logger.info(f"LLM suggested {len(llm_recommendations)} tracks")
+
+        # Search for recommendations on Spotify
+        recommended_tracks = []
+        for rec in llm_recommendations:
+            try:
+                query = f"{rec['name']} {rec['artist']}"
+                results = sp.search(q=query, type='track', limit=1)
+
+                if results['tracks']['items']:
+                    track = results['tracks']['items'][0]
+                    recommended_tracks.append({
+                        'uri': track['uri'],
+                        'name': track['name'],
+                        'artist': ', '.join([a['name'] for a in track['artists']]),
+                        'album': track['album']['name'],
+                        'image': track['album']['images'][0]['url'] if track['album']['images'] else None,
+                        'preview_url': track.get('preview_url'),
+                    })
+            except Exception as e:
+                logger.warning(f"Error searching for {rec['name']}: {e}")
+
+        if not recommended_tracks:
+            raise HTTPException(status_code=404, detail="No recommendations found on Spotify")
+
+        logger.info(f"Found {len(recommended_tracks)} recommendations")
+
+        return {
+            'status': 'success',
+            'recommendations': recommended_tracks
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error enhancing playlist: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/add-to-playlist")
+def add_tracks_to_playlist(spotify_user_id: str, playlist_id: str, track_uris: str):
+    """Add tracks to an existing playlist"""
+    if not spotify_user_id or not playlist_id or not track_uris:
+        raise HTTPException(status_code=400, detail="Missing required parameters")
+
+    if spotify_user_id not in authenticated_users:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        sp_oauth = authenticated_users[spotify_user_id]
+        sp = spotipy.Spotify(auth_manager=sp_oauth)
+
+        uris = [uri.strip() for uri in track_uris.split(',') if uri.strip()]
+
+        if not uris:
+            raise HTTPException(status_code=400, detail="No valid track URIs")
+
+        sp.playlist_add_items(playlist_id=playlist_id, items=uris)
+
+        logger.info(f"Added {len(uris)} tracks to playlist {playlist_id}")
+
+        return {
+            'status': 'success',
+            'tracks_added': len(uris)
+        }
+
+    except HTTPException:
+        raise
+    except SpotifyException as e:
+        logger.error(f"Failed to add tracks: {e}")
+        raise HTTPException(status_code=500, detail=f"Spotify error: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

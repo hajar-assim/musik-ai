@@ -4,6 +4,7 @@ import type {
   ConversionResponse,
   UserInfo,
   RecommendedTrack,
+  Playlist,
 } from "./services/api";
 import "./App.css";
 
@@ -80,16 +81,36 @@ const getRandomPlaylistName = () => {
 function App() {
   const [spotifyUserId, setSpotifyUserId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+  const [mode, setMode] = useState<"convert" | "enhance">("convert");
   const [ytPlaylistId, setYtPlaylistId] = useState("");
   const [playlistName, setPlaylistName] = useState(getRandomPlaylistName());
+  const [wantRecommendations, setWantRecommendations] = useState(true);
   const [conversion, setConversion] = useState<ConversionState>({
     status: "idle",
   });
   const [showAccessRequest, setShowAccessRequest] = useState(false);
   const [accessRequestEmail, setAccessRequestEmail] = useState("");
   const [accessRequestName, setAccessRequestName] = useState("");
-  const [accessRequestStatus, setAccessRequestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [accessRequestStatus, setAccessRequestStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
   const [accessRequestMessage, setAccessRequestMessage] = useState("");
+
+  // Enhance mode state
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [playlistSearchQuery, setPlaylistSearchQuery] = useState("");
+  const [selectedPlaylist, setSelectedPlaylist] = useState<string | null>(null);
+  const [playlistsLoading, setPlaylistsLoading] = useState(false);
+  const [enhanceStatus, setEnhanceStatus] = useState<
+    "idle" | "loading" | "recommendations" | "success" | "error"
+  >("idle");
+  const [enhanceRecommendations, setEnhanceRecommendations] = useState<
+    RecommendedTrack[]
+  >([]);
+  const [selectedEnhanceRecs, setSelectedEnhanceRecs] = useState<Set<string>>(
+    new Set()
+  );
+  const [enhanceError, setEnhanceError] = useState<string | null>(null);
 
   // Check for OAuth callback parameters and stored session
   useEffect(() => {
@@ -142,12 +163,18 @@ function App() {
     setAccessRequestStatus("loading");
 
     try {
-      const result = await musikApi.requestAccess(accessRequestEmail, accessRequestName || undefined);
+      const result = await musikApi.requestAccess(
+        accessRequestEmail,
+        accessRequestName || undefined
+      );
       setAccessRequestStatus("success");
       setAccessRequestMessage(result.message);
     } catch (error: any) {
       setAccessRequestStatus("error");
-      setAccessRequestMessage(error.response?.data?.detail || "Failed to submit request. Please try again.");
+      setAccessRequestMessage(
+        error.response?.data?.detail ||
+          "Failed to submit request. Please try again."
+      );
     }
   };
 
@@ -198,34 +225,39 @@ function App() {
     try {
       const playlistId = extractPlaylistId(ytPlaylistId.trim());
 
-      // Step 1: Match YouTube tracks to Spotify
       const matchResult = await musikApi.matchTracks(spotifyUserId, playlistId);
       const matchedUris = matchResult.matched_tracks.join(",");
 
-      // Step 2: Get AI recommendations
-      try {
-        const recommendations = await musikApi.getRecommendations(
-          spotifyUserId,
-          matchedUris
-        );
+      if (wantRecommendations) {
+        try {
+          const recommendations = await musikApi.getRecommendations(
+            spotifyUserId,
+            matchedUris
+          );
 
-        // Step 3: Show recommendations UI
+          setConversion({
+            status: "recommendations",
+            matchedTracks: matchResult.matched_tracks,
+            recommendations: recommendations.recommendations,
+            selectedRecommendations: new Set(),
+          });
+        } catch (recError: any) {
+          const recErrorMessage =
+            recError.response?.data?.detail ||
+            recError.message ||
+            "Failed to get recommendations";
+          setConversion({
+            status: "error",
+            error: `${recErrorMessage}\n\nYou can skip recommendations and create the playlist with just the matched tracks.`,
+            matchedTracks: matchResult.matched_tracks,
+          });
+        }
+      } else {
         setConversion({
           status: "recommendations",
           matchedTracks: matchResult.matched_tracks,
-          recommendations: recommendations.recommendations,
+          recommendations: [],
           selectedRecommendations: new Set(),
-        });
-      } catch (recError: any) {
-        // If recommendations fail, offer to skip them
-        const recErrorMessage =
-          recError.response?.data?.detail ||
-          recError.message ||
-          "Failed to get recommendations";
-        setConversion({
-          status: "error",
-          error: `${recErrorMessage}\n\nYou can skip recommendations and create the playlist with just the matched tracks.`,
-          matchedTracks: matchResult.matched_tracks,
         });
       }
     } catch (error: any) {
@@ -276,12 +308,106 @@ function App() {
   };
 
   const selectAllRecommendations = () => {
-    const allUris = new Set(conversion.recommendations?.map(track => track.uri) || []);
+    const allUris = new Set(
+      conversion.recommendations?.map((track) => track.uri) || []
+    );
     setConversion({ ...conversion, selectedRecommendations: allUris });
   };
 
   const deselectAllRecommendations = () => {
     setConversion({ ...conversion, selectedRecommendations: new Set() });
+  };
+
+  // Fetch playlists when switching to Enhance mode
+  useEffect(() => {
+    if (
+      mode === "enhance" &&
+      spotifyUserId &&
+      playlists.length === 0 &&
+      !playlistsLoading
+    ) {
+      const fetchPlaylists = async () => {
+        setPlaylistsLoading(true);
+        try {
+          const response = await musikApi.getUserPlaylists(spotifyUserId);
+          setPlaylists(response.playlists);
+        } catch (error: any) {
+          console.error("Error fetching playlists:", error);
+          setEnhanceError("Failed to fetch playlists");
+        } finally {
+          setPlaylistsLoading(false);
+        }
+      };
+      fetchPlaylists();
+    }
+  }, [mode, spotifyUserId, playlists.length, playlistsLoading]);
+
+  const handleEnhancePlaylist = async () => {
+    if (!spotifyUserId || !selectedPlaylist) {
+      return;
+    }
+
+    setEnhanceStatus("loading");
+    setEnhanceError(null);
+
+    try {
+      const response = await musikApi.getPlaylistRecommendations(
+        spotifyUserId,
+        selectedPlaylist
+      );
+      setEnhanceRecommendations(response.recommendations);
+      setSelectedEnhanceRecs(new Set());
+      setEnhanceStatus("recommendations");
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.message ||
+        "Failed to get recommendations";
+      setEnhanceError(errorMessage);
+      setEnhanceStatus("error");
+    }
+  };
+
+  const handleAddToPlaylist = async () => {
+    if (!spotifyUserId || !selectedPlaylist || selectedEnhanceRecs.size === 0) {
+      return;
+    }
+
+    setEnhanceStatus("loading");
+
+    try {
+      const trackUris = Array.from(selectedEnhanceRecs).join(",");
+      await musikApi.addTracksToPlaylist(
+        spotifyUserId,
+        selectedPlaylist,
+        trackUris
+      );
+      setEnhanceStatus("success");
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail || error.message || "Failed to add tracks";
+      setEnhanceError(errorMessage);
+      setEnhanceStatus("error");
+    }
+  };
+
+  const toggleEnhanceRecommendation = (uri: string) => {
+    const newSelected = new Set(selectedEnhanceRecs);
+    if (newSelected.has(uri)) {
+      newSelected.delete(uri);
+    } else {
+      newSelected.add(uri);
+    }
+    setSelectedEnhanceRecs(newSelected);
+  };
+
+  const selectAllEnhanceRecs = () => {
+    const allUris = new Set(enhanceRecommendations.map((track) => track.uri));
+    setSelectedEnhanceRecs(allUris);
+  };
+
+  const deselectAllEnhanceRecs = () => {
+    setSelectedEnhanceRecs(new Set());
   };
 
   return (
@@ -295,7 +421,7 @@ function App() {
                 musik-ai
               </h1>
               <p className="text-botticelli text-sm mt-1">
-                YouTube to Spotify playlist converter
+                just another music tool
               </p>
             </div>
             {userInfo && (
@@ -346,7 +472,8 @@ function App() {
                 welcome to musik-ai
               </h2>
               <p className="text-falcon mb-8 leading-relaxed">
-                Connect Spotify to convert playlists and discover new music with AI recommendations.
+                Connect Spotify to convert playlists and discover new music with
+                AI recommendations.
               </p>
               <button
                 onClick={handleLogin}
@@ -369,65 +496,417 @@ function App() {
           </div>
         ) : (
           <>
-            {/* Conversion Form */}
-            <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8 mb-6">
-              <h2 className="text-2xl font-bold text-chambray mb-3">
-                Convert Playlist
-              </h2>
-              <p className="text-falcon mb-2 text-sm leading-relaxed">
-                Enter a YouTube playlist ID to convert it to Spotify. We'll match the tracks and give you AI-powered recommendations to discover similar music you'll love.
-              </p>
-              <p className="text-falcon mb-6 text-sm leading-relaxed italic">
-                Have no friends to recommend you music? That's okay &lt;/3
-              </p>
-
-              <form onSubmit={handleConvert} className="space-y-6">
-                <div>
-                  <label
-                    htmlFor="ytPlaylistId"
-                    className="block text-sm font-semibold text-falcon mb-2"
-                  >
-                    YouTube Playlist URL or ID
-                  </label>
-                  <input
-                    type="text"
-                    id="ytPlaylistId"
-                    value={ytPlaylistId}
-                    onChange={(e) => setYtPlaylistId(e.target.value)}
-                    placeholder="Paste YouTube playlist URL or ID"
-                    className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon placeholder-nepal"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="playlistName"
-                    className="block text-sm font-semibold text-falcon mb-2"
-                  >
-                    Spotify Playlist Name
-                  </label>
-                  <input
-                    type="text"
-                    id="playlistName"
-                    value={playlistName}
-                    onChange={(e) => setPlaylistName(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon"
-                    required
-                  />
-                </div>
-
+            {/* Mode Tabs */}
+            <div className="bg-white rounded-xl shadow-lg border border-botticelli mb-6 overflow-hidden">
+              <div className="flex border-b-2 border-botticelli">
                 <button
-                  type="submit"
-                  disabled={conversion.status === "loading"}
-                  className="w-full bg-chambray hover:bg-waikawa disabled:bg-nepal disabled:cursor-not-allowed text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:transform-none shadow-md"
+                  onClick={() => setMode("convert")}
+                  className={`flex-1 py-4 px-6 font-semibold transition-all ${
+                    mode === "convert"
+                      ? "bg-chambray text-cararra"
+                      : "bg-cararra text-falcon hover:bg-botticelli"
+                  }`}
                 >
-                  {conversion.status === "loading"
-                    ? "Converting..."
-                    : "Convert Playlist"}
+                  Convert Playlist
                 </button>
-              </form>
+                <button
+                  onClick={() => setMode("enhance")}
+                  className={`flex-1 py-4 px-6 font-semibold transition-all ${
+                    mode === "enhance"
+                      ? "bg-chambray text-cararra"
+                      : "bg-cararra text-falcon hover:bg-botticelli"
+                  }`}
+                >
+                  Enhance Playlist
+                </button>
+              </div>
             </div>
+
+            {/* Convert Mode */}
+            {mode === "convert" && (
+              <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8 mb-6">
+                <h2 className="text-2xl font-bold text-chambray mb-3">
+                  Convert Playlist
+                </h2>
+                <p className="text-falcon mb-2 text-sm leading-relaxed">
+                  Enter a YouTube playlist ID to convert it to Spotify. We'll
+                  match the tracks and give you AI-powered recommendations to
+                  discover similar music you'll love.
+                </p>
+
+                <form onSubmit={handleConvert} className="space-y-6">
+                  <div>
+                    <label
+                      htmlFor="ytPlaylistId"
+                      className="block text-sm font-semibold text-falcon mb-2"
+                    >
+                      YouTube Playlist URL or ID
+                    </label>
+                    <input
+                      type="text"
+                      id="ytPlaylistId"
+                      value={ytPlaylistId}
+                      onChange={(e) => setYtPlaylistId(e.target.value)}
+                      placeholder="Paste YouTube playlist URL or ID"
+                      className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon placeholder-nepal"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="playlistName"
+                      className="block text-sm font-semibold text-falcon mb-2"
+                    >
+                      Spotify Playlist Name
+                    </label>
+                    <input
+                      type="text"
+                      id="playlistName"
+                      value={playlistName}
+                      onChange={(e) => setPlaylistName(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 p-4 bg-botticelli rounded-lg">
+                    <input
+                      type="checkbox"
+                      id="wantRecommendations"
+                      checked={wantRecommendations}
+                      onChange={(e) => setWantRecommendations(e.target.checked)}
+                      className="w-5 h-5 text-chambray border-2 border-nepal rounded focus:ring-2 focus:ring-chambray cursor-pointer"
+                    />
+                    <label
+                      htmlFor="wantRecommendations"
+                      className="text-sm text-falcon cursor-pointer select-none"
+                    >
+                      Get AI-powered recommendations after conversion
+                    </label>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={conversion.status === "loading"}
+                    className="w-full bg-chambray hover:bg-waikawa disabled:bg-nepal disabled:cursor-not-allowed text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:transform-none shadow-md"
+                  >
+                    {conversion.status === "loading"
+                      ? "Converting..."
+                      : "Convert Playlist"}
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* Enhance Mode */}
+            {mode === "enhance" && enhanceStatus === "idle" && (
+              <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8 mb-6">
+                <h2 className="text-2xl font-bold text-chambray mb-3 font-display">
+                  Enhance Playlist
+                </h2>
+                <p className="text-falcon mb-6 text-sm leading-relaxed italic">
+                  Have no friends to recommend you music &lt;/3? That's okay, I
+                  am here.
+                </p>
+                <p className="text-falcon mb-6 text-sm leading-relaxed">
+                  Select one of your existing Spotify playlists and we'll
+                  analyze it to recommend similar tracks you'll love.
+                </p>
+
+                {playlistsLoading ? (
+                  <div className="text-center py-12">
+                    <p className="text-nepal">Loading your playlists...</p>
+                  </div>
+                ) : playlists.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-nepal">No playlists found</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Search Box */}
+                    <div className="mb-4">
+                      <input
+                        type="text"
+                        placeholder="Search playlists..."
+                        value={playlistSearchQuery}
+                        onChange={(e) => setPlaylistSearchQuery(e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-nepal rounded-lg focus:outline-none focus:border-chambray transition-colors bg-cararra text-falcon placeholder-nepal"
+                      />
+                      <div className="flex items-start justify-between mt-2">
+                        <p className="text-xs text-nepal">
+                          Showing {playlists.filter((p) => p.name.toLowerCase().includes(playlistSearchQuery.toLowerCase())).length} of {playlists.length} playlists
+                        </p>
+                        <p className="text-xs text-nepal italic text-right">
+                          Not finding your playlist? Make sure it's on your Spotify profile publicly.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 max-h-96 overflow-y-auto">
+                      {playlists
+                        .filter((playlist) =>
+                          playlist.name.toLowerCase().includes(playlistSearchQuery.toLowerCase())
+                        )
+                        .map((playlist) => (
+                        <div
+                          key={playlist.id}
+                          onClick={() => setSelectedPlaylist(playlist.id)}
+                          className={`cursor-pointer rounded-lg border-2 p-4 transition-all ${
+                            selectedPlaylist === playlist.id
+                              ? "border-chambray bg-botticelli"
+                              : "border-nepal bg-cararra hover:border-chambray"
+                          }`}
+                        >
+                          <div className="flex gap-3">
+                            {playlist.image && (
+                              <img
+                                src={playlist.image}
+                                alt={playlist.name}
+                                className="w-16 h-16 rounded object-cover flex-shrink-0"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-chambray text-sm truncate">
+                                {playlist.name}
+                              </h3>
+                              <p className="text-falcon text-xs mt-1">
+                                {playlist.tracks_count} tracks
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={handleEnhancePlaylist}
+                      disabled={!selectedPlaylist}
+                      className="w-full bg-chambray hover:bg-waikawa disabled:bg-nepal disabled:cursor-not-allowed text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:transform-none shadow-md"
+                    >
+                      Get Recommendations
+                    </button>
+                  </>
+                )}
+
+                {enhanceError && (
+                  <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <p className="text-red-700 text-sm">{enhanceError}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Enhance: Loading */}
+            {mode === "enhance" && enhanceStatus === "loading" && (
+              <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8 mb-6">
+                <div className="text-center py-12">
+                  <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-chambray mx-auto mb-4"></div>
+                  <p className="text-nepal text-lg font-semibold">
+                    Getting recommendations...
+                  </p>
+                  <p className="text-falcon text-sm">
+                    This may take a moment...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Enhance: Recommendations */}
+            {mode === "enhance" && enhanceStatus === "recommendations" && (
+              <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8 mb-6">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-chambray mb-2 font-display">
+                    Fresh tracks for your playlist!
+                  </h2>
+                  <p className="text-falcon mb-4">
+                    Select the tracks you want to add to your playlist:
+                  </p>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={selectAllEnhanceRecs}
+                      className="px-4 py-2 bg-botticelli hover:bg-nepal text-chambray font-medium rounded-lg transition-colors duration-200 text-sm"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={deselectAllEnhanceRecs}
+                      className="px-4 py-2 bg-cararra hover:bg-nepal text-falcon font-medium rounded-lg transition-colors duration-200 text-sm border border-nepal"
+                    >
+                      Deselect All
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEnhanceStatus("idle");
+                        setEnhanceRecommendations([]);
+                        setSelectedEnhanceRecs(new Set());
+                        setSelectedPlaylist(null);
+                      }}
+                      className="px-4 py-2 bg-cararra hover:bg-nepal text-falcon font-medium rounded-lg transition-colors duration-200 text-sm border border-nepal"
+                    >
+                      Back to Playlists
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                  {enhanceRecommendations.map((track) => {
+                    const isSelected = selectedEnhanceRecs.has(track.uri);
+                    return (
+                      <div
+                        key={track.uri}
+                        onClick={() => toggleEnhanceRecommendation(track.uri)}
+                        className={`cursor-pointer rounded-lg border-2 p-4 transition-all ${
+                          isSelected
+                            ? "border-chambray bg-botticelli"
+                            : "border-nepal bg-cararra hover:border-chambray"
+                        }`}
+                      >
+                        <div className="flex gap-3">
+                          {track.image && (
+                            <img
+                              src={track.image}
+                              alt={track.name}
+                              className="w-16 h-16 rounded object-cover flex-shrink-0"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-chambray text-sm truncate">
+                              {track.name}
+                            </h3>
+                            <p className="text-falcon text-xs truncate">
+                              {track.artist}
+                            </p>
+                            <p className="text-nepal text-xs truncate mt-1">
+                              {track.album}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div
+                            className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                              isSelected
+                                ? "bg-chambray border-chambray"
+                                : "border-nepal"
+                            }`}
+                          >
+                            {isSelected && (
+                              <svg
+                                className="w-3 h-3 text-cararra"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={3}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                            )}
+                          </div>
+                          {track.preview_url && (
+                            <audio
+                              controls
+                              className="h-8 w-full max-w-[120px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <source
+                                src={track.preview_url}
+                                type="audio/mpeg"
+                              />
+                            </audio>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="flex flex-col items-center gap-2">
+                  {selectedEnhanceRecs.size > 0 && (
+                    <p className="text-sm text-nepal">
+                      {selectedEnhanceRecs.size} track
+                      {selectedEnhanceRecs.size !== 1 ? "s" : ""} selected
+                    </p>
+                  )}
+                  <button
+                    onClick={handleAddToPlaylist}
+                    disabled={selectedEnhanceRecs.size === 0}
+                    className="w-full bg-chambray hover:bg-waikawa disabled:bg-nepal disabled:cursor-not-allowed text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:transform-none shadow-md"
+                  >
+                    Add to Playlist
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Enhance: Success */}
+            {mode === "enhance" && enhanceStatus === "success" && (
+              <div className="bg-white border-2 border-cashmere rounded-xl p-8 shadow-lg">
+                <div className="text-center">
+                  <div className="w-20 h-20 bg-cashmere rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg
+                      className="w-10 h-10 text-chambray"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-bold text-chambray mb-3 font-display">
+                    Playlist Enhanced!
+                  </h2>
+                  <p className="text-falcon mb-6">
+                    {selectedEnhanceRecs.size} track
+                    {selectedEnhanceRecs.size !== 1 ? "s" : ""} added to your
+                    playlist.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setEnhanceStatus("idle");
+                      setEnhanceRecommendations([]);
+                      setSelectedEnhanceRecs(new Set());
+                      setSelectedPlaylist(null);
+                    }}
+                    className="bg-chambray hover:bg-waikawa text-cararra font-semibold py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md"
+                  >
+                    Enhance Another Playlist
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Enhance: Error */}
+            {mode === "enhance" &&
+              enhanceStatus === "error" &&
+              enhanceError && (
+                <div className="bg-white border-2 border-red-200 rounded-xl p-8 shadow-lg">
+                  <div className="text-center">
+                    <h2 className="text-2xl font-bold text-red-700 mb-3 font-display">
+                      Oops!
+                    </h2>
+                    <p className="text-falcon mb-6">{enhanceError}</p>
+                    <button
+                      onClick={() => {
+                        setEnhanceStatus("idle");
+                        setEnhanceError(null);
+                      }}
+                      className="bg-chambray hover:bg-waikawa text-cararra font-semibold py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md"
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                </div>
+              )}
 
             {/* Loading State */}
             {conversion.status === "loading" && (
@@ -452,122 +931,153 @@ function App() {
             {conversion.status === "recommendations" &&
               conversion.recommendations && (
                 <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8">
-                  <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-chambray mb-2 font-display">
-                      We found more bangers for you!
-                    </h2>
-                    <p className="text-falcon mb-4">
-                      Based on your playlist, here are some tracks you might
-                      vibe with. Select the ones you want to add:
-                    </p>
+                  {conversion.recommendations.length > 0 ? (
+                    <>
+                      <div className="mb-6">
+                        <h2 className="text-2xl font-bold text-chambray mb-2 font-display">
+                          We found more bangers for you!
+                        </h2>
+                        <p className="text-falcon mb-4">
+                          Based on your playlist, here are some tracks you might
+                          vibe with. Select the ones you want to add:
+                        </p>
 
-                    {/* Select All / Deselect All Buttons */}
-                    <div className="flex gap-3">
-                      <button
-                        onClick={selectAllRecommendations}
-                        className="px-4 py-2 bg-botticelli hover:bg-nepal text-chambray font-medium rounded-lg transition-colors duration-200 text-sm"
-                      >
-                        Select All
-                      </button>
-                      <button
-                        onClick={deselectAllRecommendations}
-                        className="px-4 py-2 bg-cararra hover:bg-nepal text-falcon font-medium rounded-lg transition-colors duration-200 text-sm border border-nepal"
-                      >
-                        Deselect All
-                      </button>
-                    </div>
-                  </div>
+                        {/* Select All / Deselect All Buttons */}
+                        <div className="flex gap-3">
+                          <button
+                            onClick={selectAllRecommendations}
+                            className="px-4 py-2 bg-botticelli hover:bg-nepal text-chambray font-medium rounded-lg transition-colors duration-200 text-sm"
+                          >
+                            Select All
+                          </button>
+                          <button
+                            onClick={deselectAllRecommendations}
+                            className="px-4 py-2 bg-cararra hover:bg-nepal text-falcon font-medium rounded-lg transition-colors duration-200 text-sm border border-nepal"
+                          >
+                            Deselect All
+                          </button>
+                        </div>
+                      </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-                    {conversion.recommendations.map((track) => {
-                      const isSelected =
-                        conversion.selectedRecommendations?.has(track.uri) ||
-                        false;
-                      return (
-                        <div
-                          key={track.uri}
-                          onClick={() => toggleRecommendation(track.uri)}
-                          className={`cursor-pointer rounded-lg border-2 p-4 transition-all ${
-                            isSelected
-                              ? "border-chambray bg-botticelli"
-                              : "border-nepal bg-cararra hover:border-chambray"
-                          }`}
-                        >
-                          <div className="flex gap-3">
-                            {track.image && (
-                              <img
-                                src={track.image}
-                                alt={track.name}
-                                className="w-16 h-16 rounded object-cover flex-shrink-0"
-                              />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-chambray text-sm truncate">
-                                {track.name}
-                              </h3>
-                              <p className="text-falcon text-xs truncate">
-                                {track.artist}
-                              </p>
-                              <p className="text-nepal text-xs truncate mt-1">
-                                {track.album}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="mt-3 flex items-center justify-between">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                        {conversion.recommendations.map((track) => {
+                          const isSelected =
+                            conversion.selectedRecommendations?.has(
+                              track.uri
+                            ) || false;
+                          return (
                             <div
-                              className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                              key={track.uri}
+                              onClick={() => toggleRecommendation(track.uri)}
+                              className={`cursor-pointer rounded-lg border-2 p-4 transition-all ${
                                 isSelected
-                                  ? "bg-chambray border-chambray"
-                                  : "border-nepal"
+                                  ? "border-chambray bg-botticelli"
+                                  : "border-nepal bg-cararra hover:border-chambray"
                               }`}
                             >
-                              {isSelected && (
-                                <svg
-                                  className="w-3 h-3 text-cararra"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={3}
-                                    d="M5 13l4 4L19 7"
+                              <div className="flex gap-3">
+                                {track.image && (
+                                  <img
+                                    src={track.image}
+                                    alt={track.name}
+                                    className="w-16 h-16 rounded object-cover flex-shrink-0"
                                   />
-                                </svg>
-                              )}
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-chambray text-sm truncate">
+                                    {track.name}
+                                  </h3>
+                                  <p className="text-falcon text-xs truncate">
+                                    {track.artist}
+                                  </p>
+                                  <p className="text-nepal text-xs truncate mt-1">
+                                    {track.album}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex items-center justify-between">
+                                <div
+                                  className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                    isSelected
+                                      ? "bg-chambray border-chambray"
+                                      : "border-nepal"
+                                  }`}
+                                >
+                                  {isSelected && (
+                                    <svg
+                                      className="w-3 h-3 text-cararra"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      viewBox="0 0 24 24"
+                                    >
+                                      <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={3}
+                                        d="M5 13l4 4L19 7"
+                                      />
+                                    </svg>
+                                  )}
+                                </div>
+                                {track.preview_url && (
+                                  <audio
+                                    controls
+                                    className="h-8 w-full max-w-[120px]"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <source
+                                      src={track.preview_url}
+                                      type="audio/mpeg"
+                                    />
+                                  </audio>
+                                )}
+                              </div>
                             </div>
-                            {track.preview_url && (
-                              <audio
-                                controls
-                                className="h-8 w-full max-w-[120px]"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <source
-                                  src={track.preview_url}
-                                  type="audio/mpeg"
-                                />
-                              </audio>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          );
+                        })}
+                      </div>
 
-                  <div className="flex flex-col items-center gap-2">
-                    {conversion.selectedRecommendations?.size || 0 > 0 ? (
-                      <p className="text-sm text-nepal">
-                        {conversion.selectedRecommendations?.size} recommendation{conversion.selectedRecommendations?.size !== 1 ? 's' : ''} selected
-                      </p>
-                    ) : null}
-                    <button
-                      onClick={handleCreatePlaylist}
-                      className="w-full bg-chambray hover:bg-waikawa text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md"
-                    >
-                      Create Playlist
-                    </button>
-                  </div>
+                      <div className="flex flex-col items-center gap-2">
+                        {conversion.selectedRecommendations?.size || 0 > 0 ? (
+                          <p className="text-sm text-nepal">
+                            {conversion.selectedRecommendations?.size}{" "}
+                            recommendation
+                            {conversion.selectedRecommendations?.size !== 1
+                              ? "s"
+                              : ""}{" "}
+                            selected
+                          </p>
+                        ) : null}
+                        <button
+                          onClick={handleCreatePlaylist}
+                          className="w-full bg-chambray hover:bg-waikawa text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md"
+                        >
+                          Create Playlist
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="mb-6">
+                        <h2 className="text-2xl font-bold text-chambray mb-2 font-display">
+                          Ready to create your playlist!
+                        </h2>
+                        <p className="text-falcon mb-4">
+                          We've matched your YouTube tracks to Spotify. Click
+                          below to create your playlist.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-center gap-2">
+                        <button
+                          onClick={handleCreatePlaylist}
+                          className="w-full bg-chambray hover:bg-waikawa text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md"
+                        >
+                          Create Playlist
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -728,19 +1238,22 @@ function App() {
               Request Access
             </h2>
             <p className="text-falcon mb-6 text-sm">
-              This app is in development mode. Submit your email and we'll add you within 24 hours.
+              This app is in development mode. Submit your email and we'll add
+              you within 24 hours.
             </p>
 
-            {accessRequestStatus === 'success' ? (
+            {accessRequestStatus === "success" ? (
               <div className="bg-cashmere border-2 border-cashmere rounded-lg p-6 mb-6">
-                <p className="text-falcon font-semibold mb-2">Request Submitted!</p>
+                <p className="text-falcon font-semibold mb-2">
+                  Request Submitted!
+                </p>
                 <p className="text-falcon text-sm">{accessRequestMessage}</p>
                 <button
                   onClick={() => {
                     setShowAccessRequest(false);
-                    setAccessRequestStatus('idle');
-                    setAccessRequestEmail('');
-                    setAccessRequestName('');
+                    setAccessRequestStatus("idle");
+                    setAccessRequestEmail("");
+                    setAccessRequestName("");
                   }}
                   className="mt-4 w-full bg-chambray hover:bg-waikawa text-cararra font-semibold py-3 px-6 rounded-lg transition-all"
                 >
@@ -750,7 +1263,10 @@ function App() {
             ) : (
               <form onSubmit={handleRequestAccess} className="space-y-4">
                 <div>
-                  <label htmlFor="requestName" className="block text-sm font-semibold text-falcon mb-2">
+                  <label
+                    htmlFor="requestName"
+                    className="block text-sm font-semibold text-falcon mb-2"
+                  >
                     Name (Optional)
                   </label>
                   <input
@@ -763,7 +1279,10 @@ function App() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="requestEmail" className="block text-sm font-semibold text-falcon mb-2">
+                  <label
+                    htmlFor="requestEmail"
+                    className="block text-sm font-semibold text-falcon mb-2"
+                  >
                     Email Address *
                   </label>
                   <input
@@ -777,9 +1296,11 @@ function App() {
                   />
                 </div>
 
-                {accessRequestStatus === 'error' && (
+                {accessRequestStatus === "error" && (
                   <div className="bg-pharlap bg-opacity-10 border border-pharlap rounded-lg p-3">
-                    <p className="text-falcon text-sm">{accessRequestMessage}</p>
+                    <p className="text-falcon text-sm">
+                      {accessRequestMessage}
+                    </p>
                   </div>
                 )}
 
@@ -788,8 +1309,8 @@ function App() {
                     type="button"
                     onClick={() => {
                       setShowAccessRequest(false);
-                      setAccessRequestStatus('idle');
-                      setAccessRequestMessage('');
+                      setAccessRequestStatus("idle");
+                      setAccessRequestMessage("");
                     }}
                     className="flex-1 bg-nepal hover:bg-botticelli text-falcon font-semibold py-3 px-6 rounded-lg transition-all"
                   >
@@ -797,10 +1318,12 @@ function App() {
                   </button>
                   <button
                     type="submit"
-                    disabled={accessRequestStatus === 'loading'}
+                    disabled={accessRequestStatus === "loading"}
                     className="flex-1 bg-chambray hover:bg-waikawa disabled:bg-nepal disabled:cursor-not-allowed text-cararra font-semibold py-3 px-6 rounded-lg transition-all"
                   >
-                    {accessRequestStatus === 'loading' ? 'Submitting...' : 'Submit Request'}
+                    {accessRequestStatus === "loading"
+                      ? "Submitting..."
+                      : "Submit Request"}
                   </button>
                 </div>
               </form>
@@ -813,7 +1336,7 @@ function App() {
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-8">
         <div className="border-t border-botticelli pt-8 text-center">
           <p className="text-nepal text-sm">
-            Built with blood sweat and tears (mostly tears)
+            built with blood sweat and tears (mostly tears)
           </p>
         </div>
       </footer>

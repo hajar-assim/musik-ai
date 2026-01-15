@@ -46,6 +46,24 @@ export interface MatchTracksResponse {
   failed_matches: string[];
 }
 
+export interface Playlist {
+  id: string;
+  name: string;
+  tracks_count: number;
+  image: string | null;
+  external_url: string;
+}
+
+export interface PlaylistsResponse {
+  status: string;
+  playlists: Playlist[];
+}
+
+export interface AddTracksResponse {
+  status: string;
+  tracks_added: number;
+}
+
 export const musikApi = {
   /**
    * Request access to the app
@@ -121,6 +139,50 @@ export const musikApi = {
       params: {
         spotify_user_id: spotifyUserId,
         playlist_name: playlistName,
+        track_uris: trackUris,
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get user's Spotify playlists
+   */
+  getUserPlaylists: async (spotifyUserId: string): Promise<PlaylistsResponse> => {
+    const response = await api.get<PlaylistsResponse>('/playlists', {
+      params: { spotify_user_id: spotifyUserId },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get AI recommendations for an existing playlist
+   */
+  getPlaylistRecommendations: async (
+    spotifyUserId: string,
+    playlistId: string
+  ): Promise<RecommendationsResponse> => {
+    const response = await api.get<RecommendationsResponse>('/enhance-playlist', {
+      params: {
+        spotify_user_id: spotifyUserId,
+        playlist_id: playlistId,
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Add tracks to an existing playlist
+   */
+  addTracksToPlaylist: async (
+    spotifyUserId: string,
+    playlistId: string,
+    trackUris: string
+  ): Promise<AddTracksResponse> => {
+    const response = await api.post<AddTracksResponse>('/add-to-playlist', null, {
+      params: {
+        spotify_user_id: spotifyUserId,
+        playlist_id: playlistId,
         track_uris: trackUris,
       },
     });
