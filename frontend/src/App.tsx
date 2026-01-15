@@ -81,8 +81,7 @@ function App() {
   const [spotifyUserId, setSpotifyUserId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [ytPlaylistId, setYtPlaylistId] = useState("");
-  const [playlistName, setPlaylistName] = useState("");
-  const [placeholderName] = useState(getRandomPlaylistName());
+  const [playlistName, setPlaylistName] = useState(getRandomPlaylistName());
   const [conversion, setConversion] = useState<ConversionState>({
     status: "idle",
   });
@@ -362,8 +361,7 @@ function App() {
                     id="playlistName"
                     value={playlistName}
                     onChange={(e) => setPlaylistName(e.target.value)}
-                    placeholder={placeholderName}
-                    className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon placeholder-nepal"
+                    className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon"
                     required
                   />
                 </div>
@@ -627,7 +625,7 @@ function App() {
                     <p className="text-falcon mb-6 break-words overflow-wrap-anywhere whitespace-pre-line">
                       {conversion.error}
                     </p>
-                    <div className="flex gap-3">
+                    <div className="flex flex-col sm:flex-row gap-3 justify-center">
                       <button
                         onClick={() => setConversion({ status: "idle" })}
                         className="bg-falcon hover:bg-pharlap text-cararra font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-md"
