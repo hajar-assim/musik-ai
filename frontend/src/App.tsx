@@ -454,23 +454,38 @@ function App() {
       </header>
 
       {/* Spotify API Deprecation Banner */}
-      <div className="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 shadow-md">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 mt-0.5">
-              <svg className="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-red-900 mb-1">
-                Project Impacted by Spotify API Changes
-              </h3>
-              <p className="text-sm text-red-800 leading-relaxed">
-                Spotify has <a href="https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api" target="_blank" rel="noopener noreferrer" className="underline hover:text-red-900 font-medium">deprecated key API features</a> (audio analysis, audio features, track previews) for AI applications, severely limiting this project's functionality. Core features like audio-based recommendations and track previews are no longer available.
-              </p>
-            </div>
-          </div>
+      <div className="bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 shadow-md text-left">
+        <div className="py-3 px-4 flex gap-2">
+          <svg
+            className="w-5 h-5 text-red-600 flex-shrink-0"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path
+              fillRule="evenodd"
+              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <p className="text-sm text-red-800">
+            <strong className="font-semibold text-red-900">
+              Project Impacted by Spotify API Changes:
+            </strong>{" "}
+            Spotify has{" "}
+            <a
+              href="https://developer.spotify.com/blog/2024-11-27-changes-to-the-web-api"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-red-900 font-medium"
+            >
+              deprecated key API features
+            </a>{" "}
+            (audio analysis, audio features, track previews) for AI
+            applications, severely limiting this project's functionality to
+            craft great reccomendations. The project has been reworked to use
+            Grok and a basic prompt to generate suggestions, as music data is
+            essentially owned by Spotify now (L Spotify)
+          </p>
         </div>
       </div>
 
@@ -656,10 +671,19 @@ function App() {
                       />
                       <div className="flex items-start justify-between mt-2">
                         <p className="text-xs text-nepal">
-                          Showing {playlists.filter((p) => p.name.toLowerCase().includes(playlistSearchQuery.toLowerCase())).length} of {playlists.length} playlists
+                          Showing{" "}
+                          {
+                            playlists.filter((p) =>
+                              p.name
+                                .toLowerCase()
+                                .includes(playlistSearchQuery.toLowerCase())
+                            ).length
+                          }{" "}
+                          of {playlists.length} playlists
                         </p>
                         <p className="text-xs text-nepal italic text-right">
-                          Not finding your playlist? Make sure it's on your Spotify profile publicly.
+                          Not finding your playlist? Make sure it's on your
+                          Spotify profile publicly.
                         </p>
                       </div>
                     </div>
@@ -667,37 +691,39 @@ function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 max-h-96 overflow-y-auto">
                       {playlists
                         .filter((playlist) =>
-                          playlist.name.toLowerCase().includes(playlistSearchQuery.toLowerCase())
+                          playlist.name
+                            .toLowerCase()
+                            .includes(playlistSearchQuery.toLowerCase())
                         )
                         .map((playlist) => (
-                        <div
-                          key={playlist.id}
-                          onClick={() => setSelectedPlaylist(playlist.id)}
-                          className={`cursor-pointer rounded-lg border-2 p-4 transition-all ${
-                            selectedPlaylist === playlist.id
-                              ? "border-chambray bg-botticelli"
-                              : "border-nepal bg-cararra hover:border-chambray"
-                          }`}
-                        >
-                          <div className="flex gap-3">
-                            {playlist.image && (
-                              <img
-                                src={playlist.image}
-                                alt={playlist.name}
-                                className="w-16 h-16 rounded object-cover flex-shrink-0"
-                              />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-chambray text-sm truncate">
-                                {playlist.name}
-                              </h3>
-                              <p className="text-falcon text-xs mt-1">
-                                {playlist.tracks_count} tracks
-                              </p>
+                          <div
+                            key={playlist.id}
+                            onClick={() => setSelectedPlaylist(playlist.id)}
+                            className={`cursor-pointer rounded-lg border-2 p-4 transition-all ${
+                              selectedPlaylist === playlist.id
+                                ? "border-chambray bg-botticelli"
+                                : "border-nepal bg-cararra hover:border-chambray"
+                            }`}
+                          >
+                            <div className="flex gap-3">
+                              {playlist.image && (
+                                <img
+                                  src={playlist.image}
+                                  alt={playlist.name}
+                                  className="w-16 h-16 rounded object-cover flex-shrink-0"
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-chambray text-sm truncate">
+                                  {playlist.name}
+                                </h3>
+                                <p className="text-falcon text-xs mt-1">
+                                  {playlist.tracks_count} tracks
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
 
                     <button
