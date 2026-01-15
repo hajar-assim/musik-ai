@@ -8,27 +8,37 @@ logger = logging.getLogger(__name__)
 
 
 def _create_prompt(tracks: List[Dict[str, str]]) -> str:
-    """Create music curator prompt for LLM"""
-    track_list = "\n".join([f"- {t['name']} by {t['artist']}" for t in tracks[:10]])
+    """Create music curator prompt for LLM with enhanced genre awareness"""
+    track_list = "\n".join([f"- {t['name']} by {t['artist']}" for t in tracks[:15]])
 
-    return f"""You are an expert music curator. Based on this playlist, recommend 15 songs that fit perfectly.
+    return f"""You are an expert music curator with deep knowledge of genres, subgenres, and music similarity.
 
-PLAYLIST TRACKS:
+ANALYZE THIS PLAYLIST:
 {track_list}
 
-INSTRUCTIONS:
-1. Match the vibe, genre, and energy
-2. Mix popular hits with hidden gems
-3. Keep consistent mood and era
-4. Ensure variety - limit songs per artist
-5. Only recommend real, existing songs
+CRITICAL REQUIREMENTS:
+1. **GENRE CONSISTENCY**: First identify the dominant genre(s) of the playlist (e.g., hip-hop, indie rock, electronic, R&B, pop, etc.)
+2. **STAY IN GENRE**: ALL recommendations MUST be from the same genre or closely related subgenres
+3. **REAL SONGS ONLY**: Only recommend songs that actually exist on Spotify
+4. **SIMILAR ARTISTS**: Prioritize artists with similar sound/style to those in the playlist
+5. **ERA CONSISTENCY**: Match the time period (90s, 2000s, 2010s, modern, etc.)
+6. **ENERGY MATCH**: Match the energy level (chill, upbeat, aggressive, mellow)
+7. **ARTIST DIVERSITY**: Maximum 2 songs per artist
+8. **POPULARITY MIX**: Include both popular and lesser-known tracks
+
+ANALYSIS PROCESS:
+1. Identify the primary genre(s)
+2. Identify the mood/vibe (upbeat, melancholic, aggressive, chill, etc.)
+3. Identify similar artists in that genre
+4. Find tracks that match BOTH genre and mood
 
 OUTPUT FORMAT:
 Return ONLY a JSON array with objects containing "name" and "artist" fields.
+DO NOT include explanations, reasoning, or any text outside the JSON.
 
-Example: [{{"name": "Track", "artist": "Artist"}}]
+Example: [{{"name": "Song Name", "artist": "Artist Name"}}]
 
-Now provide 15 recommendations:"""
+Now provide exactly 15 recommendations that match the genre and vibe:"""
 
 
 def _parse_llm_response(content: str) -> List[Dict[str, str]]:
@@ -77,10 +87,10 @@ def get_llm_recommendations(tracks: List[Dict[str, str]]) -> List[Dict[str, str]
             json={
                 "model": settings.GROQ_MODEL,
                 "messages": [
-                    {"role": "system", "content": "You are an expert music curator. Always respond with valid JSON only."},
+                    {"role": "system", "content": "You are an expert music curator with encyclopedic knowledge of music genres, artists, and songs. You specialize in finding songs that match specific genres and vibes. You only recommend real, existing songs that can be found on Spotify. Always respond with valid JSON only."},
                     {"role": "user", "content": _create_prompt(tracks)}
                 ],
-                "temperature": 0.7,
+                "temperature": 0.5,
                 "response_format": {"type": "json_object"}
             },
             timeout=30
