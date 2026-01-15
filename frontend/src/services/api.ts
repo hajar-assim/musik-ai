@@ -48,6 +48,19 @@ export interface MatchTracksResponse {
 
 export const musikApi = {
   /**
+   * Request access to the app
+   */
+  requestAccess: async (email: string, name?: string): Promise<{ status: string; message: string }> => {
+    const response = await api.post('/request-access', null, {
+      params: {
+        email,
+        ...(name && { name })
+      }
+    });
+    return response.data;
+  },
+
+  /**
    * Initiate Spotify OAuth login flow
    */
   login: (): string => {

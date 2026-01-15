@@ -40,6 +40,45 @@ oauth_sessions = {}
 authenticated_users = {}
 
 
+@app.post("/request-access")
+def request_access(email: str, name: str = None):
+    """
+    Request access to the app (for Spotify development mode limitation)
+    Sends notification email to admin
+    """
+    if not email or not email.strip():
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    # Basic email validation
+    if '@' not in email or '.' not in email:
+        raise HTTPException(status_code=400, detail="Invalid email format")
+
+    try:
+        from email_utils import send_signup_notification
+
+        logger.info(f"Access request from: {email} ({name or 'No name'})")
+
+        # Send notification email
+        email_sent = send_signup_notification(email, name)
+
+        if email_sent:
+            return {
+                "status": "success",
+                "message": "Your access request has been submitted. The admin will add you to the app within 24 hours."
+            }
+        else:
+            # Email not sent (SMTP not configured) but log the request
+            logger.warning("SMTP not configured - access request logged but no email sent")
+            return {
+                "status": "success",
+                "message": "Your access request has been received. The admin will add you to the app within 24 hours."
+            }
+
+    except Exception as e:
+        logger.error(f"Error processing access request: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process access request")
+
+
 @app.get("/login")
 def login():
     """
@@ -216,7 +255,7 @@ def match_tracks(spotify_user_id: str, yt_playlist_id: str):
 @app.get("/recommendations")
 def get_recommendations(spotify_user_id: str, track_uris: str):
     """
-    Get AI-powered track recommendations based on matched tracks
+    Get AI-powered track recommendations using LLM (Ollama or Groq)
     """
     if not spotify_user_id or not spotify_user_id.strip():
         raise HTTPException(status_code=400, detail="spotify_user_id is required")
@@ -234,100 +273,78 @@ def get_recommendations(spotify_user_id: str, track_uris: str):
         # Parse comma-separated track URIs
         uris = [uri.strip() for uri in track_uris.split(',') if uri.strip()]
 
-        # Extract track IDs from URIs (spotify:track:ID -> ID)
-        track_ids = []
-        for uri in uris[:5]:  # Use up to 5 seed tracks
-            if uri.startswith('spotify:track:'):
-                track_id = uri.split(':')[-1]
-            else:
-                # Already a track ID
-                track_id = uri
-
-            # Validate track ID format (should be 22 characters, alphanumeric)
-            if track_id and len(track_id) == 22:
-                track_ids.append(track_id)
-            else:
-                logger.warning(f"Skipping invalid track ID: {track_id}")
-
-        logger.info(f"Getting recommendations for user {spotify_user_id} based on {len(track_ids)} seed tracks: {track_ids}")
-
-        if not track_ids:
-            raise HTTPException(status_code=400, detail="No valid track IDs found. Track IDs must be 22 characters.")
-
-        if len(track_ids) < 1:
-            raise HTTPException(status_code=400, detail="At least 1 seed track is required for recommendations")
-
-        # Verify tracks exist and are accessible
-        logger.info("Verifying tracks exist before getting recommendations")
-        valid_track_ids = []
-        for track_id in track_ids:
+        # Get track info for LLM context
+        logger.info(f"Getting track info for {len(uris[:10])} tracks")
+        track_info_list = []
+        for uri in uris[:10]:  # Use up to 10 tracks for context
             try:
+                if uri.startswith('spotify:track:'):
+                    track_id = uri.split(':')[-1]
+                else:
+                    track_id = uri
+
                 track_info = sp.track(track_id)
                 if track_info:
-                    valid_track_ids.append(track_id)
-                    logger.info(f"✓ Valid track: {track_info['name']} by {track_info['artists'][0]['name']}")
-            except SpotifyException as e:
-                logger.warning(f"✗ Invalid or unavailable track ID {track_id}: {e}")
-                continue
+                    track_info_list.append({
+                        'name': track_info['name'],
+                        'artist': track_info['artists'][0]['name']
+                    })
+                    logger.info(f"✓ {track_info['name']} by {track_info['artists'][0]['name']}")
             except Exception as e:
-                logger.warning(f"✗ Error checking track {track_id}: {e}")
+                logger.warning(f"Could not get info for track {uri}: {e}")
                 continue
 
-        if not valid_track_ids:
-            raise HTTPException(status_code=400, detail="None of the provided tracks are valid or accessible")
+        if not track_info_list:
+            raise HTTPException(status_code=400, detail="Could not get information for any tracks")
 
-        logger.info(f"Using {len(valid_track_ids)} valid tracks for recommendations: {valid_track_ids}")
+        # Get LLM recommendations
+        logger.info("Requesting recommendations from LLM...")
+        from llm_recommendations import get_llm_recommendations
 
-        # Get user's market for better recommendations
-        try:
-            user_profile = sp.current_user()
-            user_market = user_profile.get('country', 'US')
-            logger.info(f"User market: {user_market}")
-        except Exception as e:
-            logger.warning(f"Could not get user market: {e}. Using US as default")
-            user_market = 'US'
+        llm_recommendations = get_llm_recommendations(track_info_list)
+        logger.info(f"LLM suggested {len(llm_recommendations)} tracks")
 
-        # Get recommendations from Spotify
-        try:
-            logger.info(f"Calling sp.recommendations(seed_tracks={valid_track_ids}, limit=15, market={user_market})")
-            recommendations = sp.recommendations(seed_tracks=valid_track_ids, limit=15, market=user_market)
-            logger.info(f"Successfully got recommendations: {recommendations.get('tracks', [])[:3]}")  # Log first 3
-        except SpotifyException as e:
-            logger.error(f"SpotifyException: {e}")
-            logger.error(f"HTTP Status: {e.http_status}, Code: {e.code}, Message: {e.msg}")
-            # Try without market as last resort
-            logger.info("Retrying without market parameter")
-            try:
-                recommendations = sp.recommendations(seed_tracks=valid_track_ids, limit=15)
-            except Exception as retry_error:
-                logger.error(f"Retry also failed: {retry_error}")
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Spotify recommendations unavailable. This might be a region or API access issue. Error: {e.msg or str(e)}"
-                )
-
+        # Search Spotify for each LLM recommendation
         recommended_tracks = []
-        for track in recommendations['tracks']:
-            recommended_tracks.append({
-                'uri': track['uri'],
-                'name': track['name'],
-                'artist': ', '.join([artist['name'] for artist in track['artists']]),
-                'album': track['album']['name'],
-                'image': track['album']['images'][0]['url'] if track['album']['images'] else None,
-                'preview_url': track.get('preview_url'),
-            })
+        for rec in llm_recommendations:
+            try:
+                query = f"{rec['name']} {rec['artist']}"
+                logger.info(f"Searching Spotify for: {query}")
 
-        logger.info(f"Found {len(recommended_tracks)} recommendations")
+                results = sp.search(q=query, type='track', limit=1)
+
+                if results['tracks']['items']:
+                    track = results['tracks']['items'][0]
+                    recommended_tracks.append({
+                        'uri': track['uri'],
+                        'name': track['name'],
+                        'artist': ', '.join([artist['name'] for artist in track['artists']]),
+                        'album': track['album']['name'],
+                        'image': track['album']['images'][0]['url'] if track['album']['images'] else None,
+                        'preview_url': track.get('preview_url'),
+                    })
+                    logger.info(f"✓ Found: {track['name']} by {track['artists'][0]['name']}")
+                else:
+                    logger.warning(f"✗ Could not find on Spotify: {query}")
+            except Exception as e:
+                logger.warning(f"Error searching for {rec['name']}: {e}")
+                continue
+
+        if not recommended_tracks:
+            raise HTTPException(
+                status_code=404,
+                detail="LLM provided recommendations but none were found on Spotify"
+            )
+
+        logger.info(f"Successfully found {len(recommended_tracks)} recommendations on Spotify")
 
         return {
             'status': 'success',
             'recommendations': recommended_tracks
         }
 
-    except SpotifyException as e:
-        logger.error(f"Spotify API error while getting recommendations: {str(e)}")
-        logger.error(f"Spotify error details - HTTP status: {e.http_status}, Code: {e.code}, Message: {e.msg}")
-        raise HTTPException(status_code=500, detail=f"Spotify API error: {e.msg or str(e)}")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting recommendations: {str(e)}")
         logger.error(f"Exception type: {type(e).__name__}")

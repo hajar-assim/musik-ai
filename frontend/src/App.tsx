@@ -85,6 +85,11 @@ function App() {
   const [conversion, setConversion] = useState<ConversionState>({
     status: "idle",
   });
+  const [showAccessRequest, setShowAccessRequest] = useState(false);
+  const [accessRequestEmail, setAccessRequestEmail] = useState("");
+  const [accessRequestName, setAccessRequestName] = useState("");
+  const [accessRequestStatus, setAccessRequestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [accessRequestMessage, setAccessRequestMessage] = useState("");
 
   // Check for OAuth callback parameters and stored session
   useEffect(() => {
@@ -122,6 +127,27 @@ function App() {
       if (error.response?.status === 401) {
         handleLogout();
       }
+    }
+  };
+
+  const handleRequestAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!accessRequestEmail.trim()) {
+      setAccessRequestMessage("Email is required");
+      setAccessRequestStatus("error");
+      return;
+    }
+
+    setAccessRequestStatus("loading");
+
+    try {
+      const result = await musikApi.requestAccess(accessRequestEmail, accessRequestName || undefined);
+      setAccessRequestStatus("success");
+      setAccessRequestMessage(result.message);
+    } catch (error: any) {
+      setAccessRequestStatus("error");
+      setAccessRequestMessage(error.response?.data?.detail || "Failed to submit request. Please try again.");
     }
   };
 
@@ -320,6 +346,17 @@ function App() {
               >
                 Connect with Spotify
               </button>
+              <div className="mt-6 text-center">
+                <p className="text-falcon text-sm mb-2">
+                  Don't have access yet?
+                </p>
+                <button
+                  onClick={() => setShowAccessRequest(true)}
+                  className="text-chambray hover:text-waikawa font-semibold text-sm underline"
+                >
+                  Request Access
+                </button>
+              </div>
             </div>
           </div>
         ) : (
@@ -649,6 +686,95 @@ function App() {
           </>
         )}
       </main>
+
+      {/* Request Access Modal */}
+      {showAccessRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8">
+            <h2 className="text-2xl font-bold text-chambray mb-4 font-display">
+              Request Access
+            </h2>
+            <p className="text-falcon mb-6 text-sm">
+              This app is in development mode. Submit your email and we'll add you within 24 hours.
+            </p>
+
+            {accessRequestStatus === 'success' ? (
+              <div className="bg-cashmere border-2 border-cashmere rounded-lg p-6 mb-6">
+                <p className="text-falcon font-semibold mb-2">Request Submitted!</p>
+                <p className="text-falcon text-sm">{accessRequestMessage}</p>
+                <button
+                  onClick={() => {
+                    setShowAccessRequest(false);
+                    setAccessRequestStatus('idle');
+                    setAccessRequestEmail('');
+                    setAccessRequestName('');
+                  }}
+                  className="mt-4 w-full bg-chambray hover:bg-waikawa text-cararra font-semibold py-3 px-6 rounded-lg transition-all"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleRequestAccess} className="space-y-4">
+                <div>
+                  <label htmlFor="requestName" className="block text-sm font-semibold text-falcon mb-2">
+                    Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="requestName"
+                    value={accessRequestName}
+                    onChange={(e) => setAccessRequestName(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon"
+                    placeholder="Your name"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="requestEmail" className="block text-sm font-semibold text-falcon mb-2">
+                    Email Address *
+                  </label>
+                  <input
+                    type="email"
+                    id="requestEmail"
+                    value={accessRequestEmail}
+                    onChange={(e) => setAccessRequestEmail(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon"
+                    placeholder="your.email@example.com"
+                    required
+                  />
+                </div>
+
+                {accessRequestStatus === 'error' && (
+                  <div className="bg-pharlap bg-opacity-10 border border-pharlap rounded-lg p-3">
+                    <p className="text-falcon text-sm">{accessRequestMessage}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAccessRequest(false);
+                      setAccessRequestStatus('idle');
+                      setAccessRequestMessage('');
+                    }}
+                    className="flex-1 bg-nepal hover:bg-botticelli text-falcon font-semibold py-3 px-6 rounded-lg transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={accessRequestStatus === 'loading'}
+                    className="flex-1 bg-chambray hover:bg-waikawa disabled:bg-nepal disabled:cursor-not-allowed text-cararra font-semibold py-3 px-6 rounded-lg transition-all"
+                  >
+                    {accessRequestStatus === 'loading' ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 mt-12">
