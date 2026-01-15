@@ -607,11 +607,13 @@ function App() {
                       />
                     </svg>
                   </div>
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <h3 className="text-2xl font-bold text-falcon mb-2">
                       Conversion Failed
                     </h3>
-                    <p className="text-falcon mb-6">{conversion.error}</p>
+                    <p className="text-falcon mb-6 break-words overflow-wrap-anywhere">
+                      {conversion.error}
+                    </p>
                     <button
                       onClick={() => setConversion({ status: "idle" })}
                       className="bg-falcon hover:bg-pharlap text-cararra font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-md"

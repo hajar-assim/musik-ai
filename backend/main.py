@@ -234,13 +234,45 @@ def get_recommendations(spotify_user_id: str, track_uris: str):
         # Parse comma-separated track URIs
         uris = [uri.strip() for uri in track_uris.split(',') if uri.strip()]
 
-        # Extract track IDs from URIs
-        track_ids = [uri.split(':')[-1] for uri in uris[:5]]  # Use up to 5 seed tracks
+        # Extract track IDs from URIs (spotify:track:ID -> ID)
+        track_ids = []
+        for uri in uris[:5]:  # Use up to 5 seed tracks
+            if uri.startswith('spotify:track:'):
+                track_id = uri.split(':')[-1]
+            else:
+                # Already a track ID
+                track_id = uri
 
-        logger.info(f"Getting recommendations for user {spotify_user_id} based on {len(track_ids)} seed tracks")
+            # Validate track ID format (should be 22 characters, alphanumeric)
+            if track_id and len(track_id) == 22:
+                track_ids.append(track_id)
+            else:
+                logger.warning(f"Skipping invalid track ID: {track_id}")
+
+        logger.info(f"Getting recommendations for user {spotify_user_id} based on {len(track_ids)} seed tracks: {track_ids}")
+
+        if not track_ids:
+            raise HTTPException(status_code=400, detail="No valid track IDs found. Track IDs must be 22 characters.")
+
+        if len(track_ids) < 1:
+            raise HTTPException(status_code=400, detail="At least 1 seed track is required for recommendations")
 
         # Get recommendations from Spotify
-        recommendations = sp.recommendations(seed_tracks=track_ids, limit=15)
+        # Try without market first, then fall back to user's market if needed
+        try:
+            logger.info("Attempting to get recommendations without market parameter")
+            recommendations = sp.recommendations(seed_tracks=track_ids, limit=15)
+        except SpotifyException as market_error:
+            # Try with user's market from their profile
+            logger.warning(f"Recommendations failed without market: {market_error}. Trying with user market...")
+            try:
+                user_profile = sp.current_user()
+                user_market = user_profile.get('country', 'US')
+                logger.info(f"Using user market: {user_market}")
+                recommendations = sp.recommendations(seed_tracks=track_ids, limit=15, market=user_market)
+            except Exception as retry_error:
+                logger.error(f"Recommendations failed with market parameter: {retry_error}")
+                raise
 
         recommended_tracks = []
         for track in recommendations['tracks']:
@@ -262,10 +294,12 @@ def get_recommendations(spotify_user_id: str, track_uris: str):
 
     except SpotifyException as e:
         logger.error(f"Spotify API error while getting recommendations: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get recommendations: {str(e)}")
+        logger.error(f"Spotify error details - HTTP status: {e.http_status}, Code: {e.code}, Message: {e.msg}")
+        raise HTTPException(status_code=500, detail=f"Spotify API error: {e.msg or str(e)}")
     except Exception as e:
         logger.error(f"Error getting recommendations: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to get recommendations: {str(e)}")
+        logger.error(f"Exception type: {type(e).__name__}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
 @app.get("/convert")
