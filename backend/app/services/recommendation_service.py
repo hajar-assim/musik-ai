@@ -10,11 +10,10 @@ logger = logging.getLogger(__name__)
 
 def _create_prompt(tracks: List[Dict[str, str]]) -> str:
     """Create music curator prompt for LLM with enhanced genre awareness"""
-    # Randomly sample up to 15 tracks to avoid bias toward first tracks
-    sample_size = min(15, len(tracks))
-    sampled_tracks = random.sample(tracks, sample_size) if len(tracks) > sample_size else tracks
+    # Use the last 15 tracks (most recently added) to capture user's current taste
+    recent_tracks = tracks[-15:] if len(tracks) > 15 else tracks
 
-    track_list = "\n".join([f"- {t['name']} by {t['artist']}" for t in sampled_tracks])
+    track_list = "\n".join([f"- {t['name']} by {t['artist']}" for t in recent_tracks])
 
     return f"""You are a professional music curator and AI recommender expert. Your goal is to recommend songs that **closely match the input playlist** in genre, mood, era, and artist style. Focus on **similarity and hidden gems** over popularity.
 
