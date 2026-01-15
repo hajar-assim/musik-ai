@@ -275,6 +275,15 @@ function App() {
     setConversion({ ...conversion, selectedRecommendations: newSelected });
   };
 
+  const selectAllRecommendations = () => {
+    const allUris = new Set(conversion.recommendations?.map(track => track.uri) || []);
+    setConversion({ ...conversion, selectedRecommendations: allUris });
+  };
+
+  const deselectAllRecommendations = () => {
+    setConversion({ ...conversion, selectedRecommendations: new Set() });
+  };
+
   return (
     <div className="min-h-screen bg-cararra flex flex-col">
       {/* Header */}
@@ -442,10 +451,26 @@ function App() {
                     <h2 className="text-2xl font-bold text-chambray mb-2 font-display">
                       We found more bangers for you!
                     </h2>
-                    <p className="text-falcon">
+                    <p className="text-falcon mb-4">
                       Based on your playlist, here are some tracks you might
                       vibe with. Select the ones you want to add:
                     </p>
+
+                    {/* Select All / Deselect All Buttons */}
+                    <div className="flex gap-3">
+                      <button
+                        onClick={selectAllRecommendations}
+                        className="px-4 py-2 bg-botticelli hover:bg-nepal text-chambray font-medium rounded-lg transition-colors duration-200 text-sm"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={deselectAllRecommendations}
+                        className="px-4 py-2 bg-cararra hover:bg-nepal text-falcon font-medium rounded-lg transition-colors duration-200 text-sm border border-nepal"
+                      >
+                        Deselect All
+                      </button>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -525,14 +550,17 @@ function App() {
                     })}
                   </div>
 
-                  <div className="flex gap-4">
+                  <div className="flex flex-col items-center gap-2">
+                    {conversion.selectedRecommendations?.size || 0 > 0 ? (
+                      <p className="text-sm text-nepal">
+                        {conversion.selectedRecommendations?.size} recommendation{conversion.selectedRecommendations?.size !== 1 ? 's' : ''} selected
+                      </p>
+                    ) : null}
                     <button
                       onClick={handleCreatePlaylist}
-                      className="flex-1 bg-chambray hover:bg-waikawa text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md"
+                      className="w-full bg-chambray hover:bg-waikawa text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md"
                     >
-                      {conversion.selectedRecommendations?.size || 0 > 0
-                        ? `Create Playlist with ${conversion.selectedRecommendations?.size} recommendations`
-                        : "Create Playlist (no recommendations)"}
+                      Create Playlist
                     </button>
                   </div>
                 </div>

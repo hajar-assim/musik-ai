@@ -99,16 +99,48 @@ def get_groq_recommendations(tracks: List[Dict[str, str]]) -> List[Dict[str, str
         result = response.json()
         content = result["choices"][0]["message"]["content"]
 
+        logger.info(f"Raw LLM response: {content[:500]}")
+
         # Parse JSON response
         try:
             recommendations = json.loads(content)
+            logger.info(f"Parsed JSON type: {type(recommendations)}")
+
             # Handle both array and object with array
             if isinstance(recommendations, dict):
-                recommendations = recommendations.get("recommendations", recommendations.get("songs", []))
+                # Try multiple possible keys
+                for key in ['recommendations', 'songs', 'tracks', 'playlist']:
+                    if key in recommendations:
+                        recommendations = recommendations[key]
+                        logger.info(f"Found recommendations under key '{key}'")
+                        break
+                # If still a dict, might be the recommendations themselves
+                if isinstance(recommendations, dict) and 'name' not in recommendations:
+                    logger.error(f"Unexpected dict structure: {list(recommendations.keys())}")
+                    raise Exception(f"Could not find recommendations array in response. Keys: {list(recommendations.keys())}")
+
+            # Handle nested arrays or mixed content (e.g., example + actual recommendations)
+            if isinstance(recommendations, list):
+                # Flatten nested arrays and filter out non-dict items
+                flattened = []
+                for item in recommendations:
+                    if isinstance(item, list):
+                        # Nested array - flatten it
+                        flattened.extend([i for i in item if isinstance(i, dict) and 'name' in i and 'artist' in i])
+                    elif isinstance(item, dict) and 'name' in item and 'artist' in item:
+                        # Valid recommendation dict
+                        # Skip example items like {"name": "Song Title", "artist": "Artist Name"}
+                        if item['name'] != "Song Title" and item['artist'] != "Artist Name":
+                            flattened.append(item)
+
+                recommendations = flattened
+                logger.info(f"Flattened to {len(recommendations)} valid recommendations")
+
             if isinstance(recommendations, list) and len(recommendations) > 0:
                 logger.info(f"✓ Groq returned {len(recommendations)} recommendations")
                 return recommendations[:15]
             else:
+                logger.error(f"Invalid recommendations format. Type: {type(recommendations)}, Length: {len(recommendations) if isinstance(recommendations, list) else 'N/A'}")
                 raise Exception("Groq returned empty or invalid recommendations")
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Groq JSON response: {e}")
