@@ -345,9 +345,6 @@ function App() {
               <h2 className="text-2xl font-bold text-chambray mb-3">
                 welcome to musik-ai
               </h2>
-              <p className="text-falcon mb-2 leading-relaxed">
-                Have no friends to recommend you music? That's okay &lt;/3
-              </p>
               <p className="text-falcon mb-8 leading-relaxed">
                 Connect your Spotify account to start converting YouTube
                 playlists to Spotify seamlessly
@@ -378,8 +375,11 @@ function App() {
               <h2 className="text-2xl font-bold text-chambray mb-3">
                 Convert Playlist
               </h2>
-              <p className="text-falcon mb-6 text-sm leading-relaxed">
+              <p className="text-falcon mb-2 text-sm leading-relaxed">
                 Enter a YouTube playlist ID to convert it to Spotify. We'll match the tracks and give you AI-powered recommendations to discover similar music you'll love.
+              </p>
+              <p className="text-falcon mb-6 text-sm leading-relaxed italic">
+                Have no friends to recommend you music? That's okay &lt;/3
               </p>
 
               <form onSubmit={handleConvert} className="space-y-6">
