@@ -1,26 +1,25 @@
 @import "tailwindcss";
 
-/*
-  To use Hoboken Serial font, place your font files in public/fonts/ and uncomment:
+/* Font Face */
+@font-face {
+  font-family: 'Hoboken Serial';
+  src: url('/fonts/Hoboken-Serial Regular/Hoboken-Serial Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
 
-  @font-face {
-    font-family: 'Hoboken Serial';
-    src: url('/fonts/HobokenSerial-Regular.woff2') format('woff2');
-    font-weight: 400;
-    font-style: normal;
-  }
+/* Tailwind v4 Theme Configuration */
+@theme {
+  /* Custom Colors */
+  --color-chambray: #334389;
+  --color-cararra: #f4f4f1;
+  --color-pharlap: #a38980;
+  --color-nepal: #93a5c7;
+  --color-botticelli: #c6d1e0;
+  --color-falcon: #6d5666;
+  --color-cashmere: #e6c5a3;
+  --color-waikawa: #6677aa;
 
-  @font-face {
-    font-family: 'Hoboken Serial';
-    src: url('/fonts/HobokenSerial-Medium.woff2') format('woff2');
-    font-weight: 500;
-    font-style: normal;
-  }
-
-  @font-face {
-    font-family: 'Hoboken Serial';
-    src: url('/fonts/HobokenSerial-Bold.woff2') format('woff2');
-    font-weight: 700;
-    font-style: normal;
-  }
-*/
+  /* Font Family */
+  --font-family-sans: 'Hoboken Serial', system-ui, -apple-system, sans-serif;
+}
