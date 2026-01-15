@@ -12,14 +12,19 @@ interface ConversionState {
 const PLAYLIST_NAMES = [
   'DepressingJams123',
   'MidnightVibes247',
-  'SadBoyHours',
-  'RainyDayAnthems',
-  'ExistentialBops',
-  'MelancholyMix',
-  'ThreeAMThoughts',
-  'EmotionalDamage',
-  'CryingInTheClub',
-  'BigSadEnergy',
+  'SunshineAndBops',
+  'CozyMorningMix',
+  'WorkoutBangers',
+  'ChaoticEnergy',
+  'VintageVibes',
+  'GoodVibesOnly',
+  'MainCharacterMusic',
+  'UnhingedPlaylist',
+  'RetroRoadtrip',
+  'StudyModeActivated',
+  'WeekendAnthems',
+  'GroceryStoreBops',
+  'ImTheVillain',
 ];
 
 const getRandomPlaylistName = () => {
