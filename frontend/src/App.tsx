@@ -1,30 +1,76 @@
-import { useState, useEffect } from 'react';
-import { musikApi } from './services/api';
-import type { ConversionResponse, UserInfo } from './services/api';
-import './App.css';
+import { useState, useEffect } from "react";
+import { musikApi } from "./services/api";
+import type {
+  ConversionResponse,
+  UserInfo,
+  RecommendedTrack,
+} from "./services/api";
+import "./App.css";
 
 interface ConversionState {
-  status: 'idle' | 'loading' | 'success' | 'error';
+  status: "idle" | "loading" | "recommendations" | "success" | "error";
   data?: ConversionResponse;
   error?: string;
+  matchedTracks?: string[];
+  recommendations?: RecommendedTrack[];
+  selectedRecommendations?: Set<string>;
 }
 
 const PLAYLIST_NAMES = [
-  'DepressingJams123',
-  'MidnightVibes247',
-  'SunshineAndBops',
-  'CozyMorningMix',
-  'WorkoutBangers',
-  'ChaoticEnergy',
-  'VintageVibes',
-  'GoodVibesOnly',
-  'MainCharacterMusic',
-  'UnhingedPlaylist',
-  'RetroRoadtrip',
-  'StudyModeActivated',
-  'WeekendAnthems',
-  'GroceryStoreBops',
-  'ImTheVillain',
+  "LateNightCommits",
+  "BackgroundNoiseIRL",
+  "HeadphonesOnWorldOff",
+  "BurnoutButProductive",
+  "FocusButMakeItSad",
+  "RainyBusRide",
+  "3AMDebugging",
+  "CalmBeforeTheDeadline",
+  "CoffeeColdStillCoding",
+  "LowEnergyHighAnxiety",
+  "QuietMotivation",
+  "StaringAtTheScreen",
+  "SoftBeatsHardThoughts",
+  "AlmostDoneIThink",
+  "WinterSemesterMood",
+  "StudyRoomAfterMidnight",
+  "NoLyricsJustVibes",
+  "BrainFogAnthems",
+  "MusicForOverthinking",
+  "OneMoreTaskThenSleep",
+  "CodingButEmotionally",
+  "MainCharacterOnMute",
+  "ExistentialBackgroundMusic",
+  "LongWalksNoDestination",
+  "FocusedButTired",
+  "DeadlineEnergy",
+  "LoFiButStressed",
+  "MentallyElsewhere",
+  "WorkingThroughIt",
+  "BackgroundMusicForLife",
+  "ImCooked",
+  "ActuallyCooked",
+  "MentallyCooked",
+  "PhysicallyHereMentallyGone",
+  "BrainIsFried",
+  "RunningOnFumes",
+  "BarelyHoldingItTogether",
+  "ThisIsFineIRL",
+  "IShouldBeSleeping",
+  "WhyAmIStillAwake",
+  "SoTiredButStillTrying",
+  "LowBatteryMode",
+  "EmotionallyUnavailable",
+  "JustOneMoreSong",
+  "ThisPlaylistIsCoping",
+  "SurvivingNotThriving",
+  "OperatingOnAutopilot",
+  "ChronicallyOnlineThoughts",
+  "DoingMyBestIThink",
+  "PleaseLetMeFocus",
+  "SomehowStillWorking",
+  "TooTiredToCare",
+  "QuietlyLosingIt",
+  "HoldingOnByThreads",
 ];
 
 const getRandomPlaylistName = () => {
@@ -34,31 +80,33 @@ const getRandomPlaylistName = () => {
 function App() {
   const [spotifyUserId, setSpotifyUserId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [ytPlaylistId, setYtPlaylistId] = useState('');
-  const [playlistName, setPlaylistName] = useState('');
+  const [ytPlaylistId, setYtPlaylistId] = useState("");
+  const [playlistName, setPlaylistName] = useState("");
   const [placeholderName] = useState(getRandomPlaylistName());
-  const [conversion, setConversion] = useState<ConversionState>({ status: 'idle' });
+  const [conversion, setConversion] = useState<ConversionState>({
+    status: "idle",
+  });
 
   // Check for OAuth callback parameters and stored session
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const userId = params.get('spotify_user_id');
-    const status = params.get('status');
-    const error = params.get('error');
+    const userId = params.get("spotify_user_id");
+    const status = params.get("status");
+    const error = params.get("error");
 
     if (error) {
       alert(`Authentication error: ${error}`);
-      window.history.replaceState({}, '', '/');
+      window.history.replaceState({}, "", "/");
       return;
     }
 
-    if (userId && status === 'success') {
-      localStorage.setItem('spotify_user_id', userId);
+    if (userId && status === "success") {
+      localStorage.setItem("spotify_user_id", userId);
       setSpotifyUserId(userId);
-      window.history.replaceState({}, '', '/');
+      window.history.replaceState({}, "", "/");
       fetchUserInfo(userId);
     } else {
-      const storedUserId = localStorage.getItem('spotify_user_id');
+      const storedUserId = localStorage.getItem("spotify_user_id");
       if (storedUserId) {
         setSpotifyUserId(storedUserId);
         fetchUserInfo(storedUserId);
@@ -71,7 +119,7 @@ function App() {
       const info = await musikApi.getCurrentUser(userId);
       setUserInfo(info);
     } catch (error: any) {
-      console.error('Failed to fetch user info:', error);
+      console.error("Failed to fetch user info:", error);
       if (error.response?.status === 401) {
         handleLogout();
       }
@@ -83,20 +131,20 @@ function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('spotify_user_id');
+    localStorage.removeItem("spotify_user_id");
     setSpotifyUserId(null);
     setUserInfo(null);
-    setConversion({ status: 'idle' });
+    setConversion({ status: "idle" });
   };
 
   const extractPlaylistId = (input: string): string => {
-    if (input.startsWith('PL')) {
+    if (input.startsWith("PL")) {
       return input;
     }
 
     try {
       const url = new URL(input);
-      const listParam = url.searchParams.get('list');
+      const listParam = url.searchParams.get("list");
       if (listParam) {
         return listParam;
       }
@@ -111,25 +159,82 @@ function App() {
     e.preventDefault();
 
     if (!spotifyUserId) {
-      alert('Please log in with Spotify first');
+      alert("Please log in with Spotify first");
       return;
     }
 
     if (!ytPlaylistId.trim() || !playlistName.trim()) {
-      alert('Please fill in all fields');
+      alert("Please fill in all fields");
       return;
     }
 
-    setConversion({ status: 'loading' });
+    setConversion({ status: "loading" });
 
     try {
       const playlistId = extractPlaylistId(ytPlaylistId.trim());
-      const result = await musikApi.convertPlaylist(spotifyUserId, playlistId, playlistName);
-      setConversion({ status: 'success', data: result });
+
+      // Step 1: Match YouTube tracks to Spotify
+      const matchResult = await musikApi.matchTracks(spotifyUserId, playlistId);
+      const matchedUris = matchResult.matched_tracks.join(",");
+
+      // Step 2: Get AI recommendations
+      const recommendations = await musikApi.getRecommendations(
+        spotifyUserId,
+        matchedUris
+      );
+
+      // Step 3: Show recommendations UI
+      setConversion({
+        status: "recommendations",
+        matchedTracks: matchResult.matched_tracks,
+        recommendations: recommendations.recommendations,
+        selectedRecommendations: new Set(),
+      });
     } catch (error: any) {
-      const errorMessage = error.response?.data?.detail || error.message || 'Conversion failed';
-      setConversion({ status: 'error', error: errorMessage });
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.message ||
+        "Failed to fetch recommendations";
+      setConversion({ status: "error", error: errorMessage });
     }
+  };
+
+  const handleCreatePlaylist = async () => {
+    if (!spotifyUserId || !conversion.matchedTracks) {
+      return;
+    }
+
+    setConversion({ ...conversion, status: "loading" });
+
+    try {
+      // Combine matched tracks with selected recommendations
+      const selectedRecs = Array.from(conversion.selectedRecommendations || []);
+      const allTracks = [...conversion.matchedTracks, ...selectedRecs];
+      const trackUris = allTracks.join(",");
+
+      const result = await musikApi.createPlaylist(
+        spotifyUserId,
+        playlistName,
+        trackUris
+      );
+      setConversion({ status: "success", data: result });
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.message ||
+        "Failed to create playlist";
+      setConversion({ status: "error", error: errorMessage });
+    }
+  };
+
+  const toggleRecommendation = (uri: string) => {
+    const newSelected = new Set(conversion.selectedRecommendations || []);
+    if (newSelected.has(uri)) {
+      newSelected.delete(uri);
+    } else {
+      newSelected.add(uri);
+    }
+    setConversion({ ...conversion, selectedRecommendations: newSelected });
   };
 
   return (
@@ -139,8 +244,12 @@ function App() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-cararra tracking-tight">musik-ai</h1>
-              <p className="text-botticelli text-sm mt-1">YouTube to Spotify playlist converter</p>
+              <h1 className="text-3xl font-bold text-cararra tracking-tight font-display">
+                musik-ai
+              </h1>
+              <p className="text-botticelli text-sm mt-1">
+                YouTube to Spotify playlist converter
+              </p>
             </div>
             {userInfo && (
               <div className="flex items-center gap-4">
@@ -153,7 +262,9 @@ function App() {
                     />
                   )}
                   <div className="text-right">
-                    <p className="font-medium text-cararra text-sm">{userInfo.display_name}</p>
+                    <p className="font-medium text-cararra text-sm">
+                      {userInfo.display_name}
+                    </p>
                     <p className="text-botticelli text-xs">{userInfo.email}</p>
                   </div>
                 </div>
@@ -176,13 +287,20 @@ function App() {
           <div className="bg-white rounded-xl shadow-lg border border-botticelli p-12 text-center">
             <div className="max-w-md mx-auto">
               <div className="w-16 h-16 bg-chambray rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-8 h-8 text-cararra" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                <svg
+                  className="w-8 h-8 text-cararra"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
                 </svg>
               </div>
-              <h2 className="text-2xl font-bold text-chambray mb-3">Welcome to musik-ai</h2>
+              <h2 className="text-2xl font-bold text-chambray mb-3">
+                welcome to musik-ai
+              </h2>
               <p className="text-falcon mb-8 leading-relaxed">
-                Connect your Spotify account to start converting YouTube playlists to Spotify seamlessly
+                Connect your Spotify account to start converting YouTube
+                playlists to Spotify seamlessly
               </p>
               <button
                 onClick={handleLogin}
@@ -196,11 +314,16 @@ function App() {
           <>
             {/* Conversion Form */}
             <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8 mb-6">
-              <h2 className="text-2xl font-bold text-chambray mb-6">Convert Playlist</h2>
+              <h2 className="text-2xl font-bold text-chambray mb-6">
+                Convert Playlist
+              </h2>
 
               <form onSubmit={handleConvert} className="space-y-6">
                 <div>
-                  <label htmlFor="ytPlaylistId" className="block text-sm font-semibold text-falcon mb-2">
+                  <label
+                    htmlFor="ytPlaylistId"
+                    className="block text-sm font-semibold text-falcon mb-2"
+                  >
                     YouTube Playlist URL or ID
                   </label>
                   <input
@@ -215,7 +338,10 @@ function App() {
                 </div>
 
                 <div>
-                  <label htmlFor="playlistName" className="block text-sm font-semibold text-falcon mb-2">
+                  <label
+                    htmlFor="playlistName"
+                    className="block text-sm font-semibold text-falcon mb-2"
+                  >
                     Spotify Playlist Name
                   </label>
                   <input
@@ -231,58 +357,198 @@ function App() {
 
                 <button
                   type="submit"
-                  disabled={conversion.status === 'loading'}
+                  disabled={conversion.status === "loading"}
                   className="w-full bg-chambray hover:bg-waikawa disabled:bg-nepal disabled:cursor-not-allowed text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 disabled:transform-none shadow-md"
                 >
-                  {conversion.status === 'loading' ? 'Converting...' : 'Convert Playlist'}
+                  {conversion.status === "loading"
+                    ? "Converting..."
+                    : "Convert Playlist"}
                 </button>
               </form>
             </div>
 
             {/* Loading State */}
-            {conversion.status === 'loading' && (
+            {conversion.status === "loading" && (
               <div className="bg-botticelli border-2 border-nepal rounded-xl p-6 shadow-md">
                 <div className="flex items-center gap-4">
                   <div className="relative">
                     <div className="animate-spin rounded-full h-8 w-8 border-4 border-nepal border-t-chambray"></div>
                   </div>
                   <div>
-                    <p className="text-chambray font-semibold">Converting your playlist</p>
-                    <p className="text-falcon text-sm">This may take a moment...</p>
+                    <p className="text-chambray font-semibold">
+                      Finding more bangers for you
+                    </p>
+                    <p className="text-falcon text-sm">
+                      This may take a moment...
+                    </p>
                   </div>
                 </div>
               </div>
             )}
 
+            {/* Recommendations State */}
+            {conversion.status === "recommendations" &&
+              conversion.recommendations && (
+                <div className="bg-white rounded-xl shadow-lg border border-botticelli p-8">
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-chambray mb-2 font-display">
+                      We found more bangers for you!
+                    </h2>
+                    <p className="text-falcon">
+                      Based on your playlist, here are some tracks you might
+                      vibe with. Select the ones you want to add:
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                    {conversion.recommendations.map((track) => {
+                      const isSelected =
+                        conversion.selectedRecommendations?.has(track.uri) ||
+                        false;
+                      return (
+                        <div
+                          key={track.uri}
+                          onClick={() => toggleRecommendation(track.uri)}
+                          className={`cursor-pointer rounded-lg border-2 p-4 transition-all ${
+                            isSelected
+                              ? "border-chambray bg-botticelli"
+                              : "border-nepal bg-cararra hover:border-chambray"
+                          }`}
+                        >
+                          <div className="flex gap-3">
+                            {track.image && (
+                              <img
+                                src={track.image}
+                                alt={track.name}
+                                className="w-16 h-16 rounded object-cover flex-shrink-0"
+                              />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-chambray text-sm truncate">
+                                {track.name}
+                              </h3>
+                              <p className="text-falcon text-xs truncate">
+                                {track.artist}
+                              </p>
+                              <p className="text-nepal text-xs truncate mt-1">
+                                {track.album}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between">
+                            <div
+                              className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                isSelected
+                                  ? "bg-chambray border-chambray"
+                                  : "border-nepal"
+                              }`}
+                            >
+                              {isSelected && (
+                                <svg
+                                  className="w-3 h-3 text-cararra"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={3}
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                              )}
+                            </div>
+                            {track.preview_url && (
+                              <audio
+                                controls
+                                className="h-8 w-full max-w-[120px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <source
+                                  src={track.preview_url}
+                                  type="audio/mpeg"
+                                />
+                              </audio>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button
+                      onClick={handleCreatePlaylist}
+                      className="flex-1 bg-chambray hover:bg-waikawa text-cararra font-semibold py-4 px-6 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md"
+                    >
+                      {conversion.selectedRecommendations?.size || 0 > 0
+                        ? `Create Playlist with ${conversion.selectedRecommendations?.size} recommendations`
+                        : "Create Playlist (no recommendations)"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
             {/* Success State */}
-            {conversion.status === 'success' && conversion.data && (
+            {conversion.status === "success" && conversion.data && (
               <div className="bg-white border-2 border-cashmere rounded-xl p-8 shadow-lg">
                 <div className="flex items-start gap-4 mb-6">
                   <div className="w-12 h-12 bg-cashmere rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg className="w-6 h-6 text-falcon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg
+                      className="w-6 h-6 text-falcon"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-chambray mb-2">Conversion Successful!</h3>
-                    <p className="text-falcon mb-6">Your playlist has been created on Spotify</p>
+                    <h3 className="text-2xl font-bold text-chambray mb-2">
+                      Conversion Successful!
+                    </h3>
+                    <p className="text-falcon mb-6">
+                      Your playlist has been created on Spotify
+                    </p>
 
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <div className="bg-cararra rounded-lg p-4">
-                        <p className="text-nepal text-sm font-medium">Playlist Name</p>
-                        <p className="text-chambray font-semibold">{conversion.data.playlist_name}</p>
+                        <p className="text-nepal text-sm font-medium">
+                          Playlist Name
+                        </p>
+                        <p className="text-chambray font-semibold">
+                          {conversion.data.playlist_name}
+                        </p>
                       </div>
                       <div className="bg-cararra rounded-lg p-4">
-                        <p className="text-nepal text-sm font-medium">Total Videos</p>
-                        <p className="text-chambray font-semibold">{conversion.data.total_videos}</p>
+                        <p className="text-nepal text-sm font-medium">
+                          Total Videos
+                        </p>
+                        <p className="text-chambray font-semibold">
+                          {conversion.data.total_videos}
+                        </p>
                       </div>
                       <div className="bg-cararra rounded-lg p-4">
-                        <p className="text-nepal text-sm font-medium">Matched Tracks</p>
-                        <p className="text-chambray font-semibold">{conversion.data.matched_tracks}</p>
+                        <p className="text-nepal text-sm font-medium">
+                          Matched Tracks
+                        </p>
+                        <p className="text-chambray font-semibold">
+                          {conversion.data.matched_tracks}
+                        </p>
                       </div>
                       <div className="bg-cararra rounded-lg p-4">
-                        <p className="text-nepal text-sm font-medium">Failed Matches</p>
-                        <p className="text-falcon font-semibold">{conversion.data.failed_matches}</p>
+                        <p className="text-nepal text-sm font-medium">
+                          Failed Matches
+                        </p>
+                        <p className="text-falcon font-semibold">
+                          {conversion.data.failed_matches}
+                        </p>
                       </div>
                     </div>
 
@@ -299,14 +565,21 @@ function App() {
 
                     {conversion.data.failed_match_titles.length > 0 && (
                       <div className="mt-6 pt-6 border-t-2 border-botticelli">
-                        <p className="font-semibold text-falcon mb-3">Tracks that couldn't be matched:</p>
+                        <p className="font-semibold text-falcon mb-3">
+                          Tracks that couldn't be matched:
+                        </p>
                         <ul className="space-y-2">
-                          {conversion.data.failed_match_titles.map((title, index) => (
-                            <li key={index} className="text-sm text-nepal flex items-start gap-2">
-                              <span className="text-pharlap">•</span>
-                              <span>{title}</span>
-                            </li>
-                          ))}
+                          {conversion.data.failed_match_titles.map(
+                            (title, index) => (
+                              <li
+                                key={index}
+                                className="text-sm text-nepal flex items-start gap-2"
+                              >
+                                <span className="text-pharlap">•</span>
+                                <span>{title}</span>
+                              </li>
+                            )
+                          )}
                         </ul>
                       </div>
                     )}
@@ -316,19 +589,31 @@ function App() {
             )}
 
             {/* Error State */}
-            {conversion.status === 'error' && (
+            {conversion.status === "error" && (
               <div className="bg-white border-2 border-pharlap rounded-xl p-8 shadow-lg">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 bg-pharlap rounded-full flex items-center justify-center flex-shrink-0">
-                    <svg className="w-6 h-6 text-cararra" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <svg
+                      className="w-6 h-6 text-cararra"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
                     </svg>
                   </div>
                   <div className="flex-1">
-                    <h3 className="text-2xl font-bold text-falcon mb-2">Conversion Failed</h3>
+                    <h3 className="text-2xl font-bold text-falcon mb-2">
+                      Conversion Failed
+                    </h3>
                     <p className="text-falcon mb-6">{conversion.error}</p>
                     <button
-                      onClick={() => setConversion({ status: 'idle' })}
+                      onClick={() => setConversion({ status: "idle" })}
                       className="bg-falcon hover:bg-pharlap text-cararra font-semibold py-3 px-6 rounded-lg transition-all duration-200 shadow-md"
                     >
                       Try Again

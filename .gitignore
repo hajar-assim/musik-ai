@@ -46,8 +46,11 @@ env/
 # Claude Code
 .claude/
 
-# Vault
+# Vault & Spotipy cache
 .cache/
+.cache
+.cache-*
+backend/.cache*
 *.hcl
 
 # Logs
@@ -67,6 +70,7 @@ frontend/build/
 frontend/.next/
 frontend/.nuxt/
 frontend/out/
+frontend/public/fonts/*.zip
 
 # OS
 Thumbs.db

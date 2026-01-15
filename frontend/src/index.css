@@ -9,6 +9,22 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Merriweather';
+  src: url('/fonts/Merriweather/Merriweather-VariableFont_opsz,wdth,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Merriweather';
+  src: url('/fonts/Merriweather/Merriweather-Italic-VariableFont_opsz,wdth,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
 /* Tailwind v4 Theme Configuration */
 @theme {
   /* Custom Colors */
@@ -22,7 +38,8 @@
   --color-waikawa: #6677aa;
 
   /* Font Family */
-  --font-family-sans: 'Hoboken Serial', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-family-sans: 'Merriweather', ui-serif, Georgia, serif;
+  --font-family-display: 'Hoboken Serial', ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 /* Global Styles */

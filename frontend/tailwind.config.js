@@ -17,7 +17,8 @@ export default {
         'waikawa': '#6677aa',
       },
       fontFamily: {
-        'sans': ['Hoboken Serial', 'system-ui', '-apple-system', 'sans-serif'],
+        'sans': ['Merriweather', 'ui-serif', 'Georgia', 'serif'],
+        'display': ['Hoboken Serial', 'system-ui', '-apple-system', 'sans-serif'],
       },
     },
   },

@@ -25,6 +25,27 @@ export interface UserInfo {
   images: Array<{ url: string }>;
 }
 
+export interface RecommendedTrack {
+  uri: string;
+  name: string;
+  artist: string;
+  album: string;
+  image: string | null;
+  preview_url: string | null;
+}
+
+export interface RecommendationsResponse {
+  status: string;
+  recommendations: RecommendedTrack[];
+}
+
+export interface MatchTracksResponse {
+  status: string;
+  matched_tracks: string[];
+  total_videos: number;
+  failed_matches: string[];
+}
+
 export const musikApi = {
   /**
    * Initiate Spotify OAuth login flow
@@ -44,18 +65,50 @@ export const musikApi = {
   },
 
   /**
-   * Convert YouTube playlist to Spotify
+   * Match YouTube playlist tracks to Spotify
    */
-  convertPlaylist: async (
+  matchTracks: async (
     spotifyUserId: string,
-    ytPlaylistId: string,
-    playlistName: string
+    ytPlaylistId: string
+  ): Promise<MatchTracksResponse> => {
+    const response = await api.get<MatchTracksResponse>('/match-tracks', {
+      params: {
+        spotify_user_id: spotifyUserId,
+        yt_playlist_id: ytPlaylistId,
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get AI-powered track recommendations
+   */
+  getRecommendations: async (
+    spotifyUserId: string,
+    trackUris: string
+  ): Promise<RecommendationsResponse> => {
+    const response = await api.get<RecommendationsResponse>('/recommendations', {
+      params: {
+        spotify_user_id: spotifyUserId,
+        track_uris: trackUris,
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Create Spotify playlist from track URIs
+   */
+  createPlaylist: async (
+    spotifyUserId: string,
+    playlistName: string,
+    trackUris: string
   ): Promise<ConversionResponse> => {
     const response = await api.get<ConversionResponse>('/convert', {
       params: {
         spotify_user_id: spotifyUserId,
-        yt_playlist_id: ytPlaylistId,
         playlist_name: playlistName,
+        track_uris: trackUris,
       },
     });
     return response.data;

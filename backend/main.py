@@ -140,30 +140,23 @@ def get_current_user(spotify_user_id: str):
         raise HTTPException(status_code=500, detail="Failed to fetch user info")
 
 
-@app.get("/convert")
-def convert(spotify_user_id: str, yt_playlist_id: str, playlist_name: str):
+@app.get("/match-tracks")
+def match_tracks(spotify_user_id: str, yt_playlist_id: str):
     """
-    Convert YouTube playlist to Spotify
+    Match YouTube playlist tracks to Spotify without creating a playlist
+    Returns matched track URIs for recommendations
     """
-    # Validate inputs
     if not spotify_user_id or not spotify_user_id.strip():
         raise HTTPException(status_code=400, detail="spotify_user_id is required")
 
     if not yt_playlist_id or not yt_playlist_id.strip():
         raise HTTPException(status_code=400, detail="yt_playlist_id is required")
 
-    if not playlist_name or not playlist_name.strip():
-        raise HTTPException(status_code=400, detail="playlist_name is required")
-
-    # Check if user is authenticated
     if spotify_user_id not in authenticated_users:
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated. Please log in with Spotify first."
-        )
+        raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
-        logger.info(f"Starting conversion for Spotify user: {spotify_user_id}, YouTube playlist: {yt_playlist_id}")
+        logger.info(f"Matching tracks for user: {spotify_user_id}, YouTube playlist: {yt_playlist_id}")
 
         sp_oauth = authenticated_users[spotify_user_id]
         sp = spotipy.Spotify(auth_manager=sp_oauth)
@@ -178,11 +171,11 @@ def convert(spotify_user_id: str, yt_playlist_id: str, playlist_name: str):
             logger.error(f"Failed to fetch YouTube playlist {yt_playlist_id}: {str(e)}")
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to fetch YouTube playlist. Please check the playlist ID and ensure it's public. Error: {str(e)}"
+                detail=f"Failed to fetch YouTube playlist. Error: {str(e)}"
             )
 
         if not video_titles:
-            raise HTTPException(status_code=400, detail="YouTube playlist is empty or could not be fetched")
+            raise HTTPException(status_code=400, detail="YouTube playlist is empty")
 
         # Search for tracks on Spotify
         track_uris = []
@@ -198,19 +191,120 @@ def convert(spotify_user_id: str, yt_playlist_id: str, playlist_name: str):
                 logger.error(f"Spotify API error while searching for '{title}': {str(e)}")
                 failed_matches.append(title)
 
-        logger.info(f"Matched {len(track_uris)}/{len(video_titles)} tracks on Spotify")
+        logger.info(f"Matched {len(track_uris)}/{len(video_titles)} tracks")
 
         if not track_uris:
             raise HTTPException(
                 status_code=404,
-                detail="No matching tracks found on Spotify for this YouTube playlist"
+                detail="No matching tracks found on Spotify"
             )
+
+        return {
+            'status': 'success',
+            'matched_tracks': track_uris,
+            'total_videos': len(video_titles),
+            'failed_matches': failed_matches[:10]
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error matching tracks: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to match tracks: {str(e)}")
+
+
+@app.get("/recommendations")
+def get_recommendations(spotify_user_id: str, track_uris: str):
+    """
+    Get AI-powered track recommendations based on matched tracks
+    """
+    if not spotify_user_id or not spotify_user_id.strip():
+        raise HTTPException(status_code=400, detail="spotify_user_id is required")
+
+    if not track_uris or not track_uris.strip():
+        raise HTTPException(status_code=400, detail="track_uris is required")
+
+    if spotify_user_id not in authenticated_users:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        sp_oauth = authenticated_users[spotify_user_id]
+        sp = spotipy.Spotify(auth_manager=sp_oauth)
+
+        # Parse comma-separated track URIs
+        uris = [uri.strip() for uri in track_uris.split(',') if uri.strip()]
+
+        # Extract track IDs from URIs
+        track_ids = [uri.split(':')[-1] for uri in uris[:5]]  # Use up to 5 seed tracks
+
+        logger.info(f"Getting recommendations for user {spotify_user_id} based on {len(track_ids)} seed tracks")
+
+        # Get recommendations from Spotify
+        recommendations = sp.recommendations(seed_tracks=track_ids, limit=15)
+
+        recommended_tracks = []
+        for track in recommendations['tracks']:
+            recommended_tracks.append({
+                'uri': track['uri'],
+                'name': track['name'],
+                'artist': ', '.join([artist['name'] for artist in track['artists']]),
+                'album': track['album']['name'],
+                'image': track['album']['images'][0]['url'] if track['album']['images'] else None,
+                'preview_url': track.get('preview_url'),
+            })
+
+        logger.info(f"Found {len(recommended_tracks)} recommendations")
+
+        return {
+            'status': 'success',
+            'recommendations': recommended_tracks
+        }
+
+    except SpotifyException as e:
+        logger.error(f"Spotify API error while getting recommendations: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get recommendations: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get recommendations: {str(e)}")
+
+
+@app.get("/convert")
+def convert(spotify_user_id: str, playlist_name: str, track_uris: str, yt_playlist_id: str = None):
+    """
+    Create Spotify playlist from track URIs
+    Can optionally fetch from YouTube playlist if yt_playlist_id is provided
+    """
+    # Validate inputs
+    if not spotify_user_id or not spotify_user_id.strip():
+        raise HTTPException(status_code=400, detail="spotify_user_id is required")
+
+    if not playlist_name or not playlist_name.strip():
+        raise HTTPException(status_code=400, detail="playlist_name is required")
+
+    # Check if user is authenticated
+    if spotify_user_id not in authenticated_users:
+        raise HTTPException(
+            status_code=401,
+            detail="Not authenticated. Please log in with Spotify first."
+        )
+
+    try:
+        sp_oauth = authenticated_users[spotify_user_id]
+        sp = spotipy.Spotify(auth_manager=sp_oauth)
+
+        # Parse track URIs from comma-separated string
+        uris = [uri.strip() for uri in track_uris.split(',') if uri.strip()]
+
+        if not uris:
+            raise HTTPException(status_code=400, detail="No valid track URIs provided")
+
+        logger.info(f"Creating playlist '{playlist_name}' for user {spotify_user_id} with {len(uris)} tracks")
 
         # Create Spotify playlist
         try:
             playlist = sp.user_playlist_create(user=spotify_user_id, name=playlist_name)
-            sp.playlist_add_items(playlist_id=playlist["id"], items=track_uris)
-            logger.info(f"Successfully created Spotify playlist '{playlist_name}' with {len(track_uris)} tracks")
+            sp.playlist_add_items(playlist_id=playlist["id"], items=uris)
+            logger.info(f"Successfully created Spotify playlist '{playlist_name}' with {len(uris)} tracks")
         except SpotifyException as e:
             logger.error(f"Failed to create Spotify playlist: {str(e)}")
             raise HTTPException(
@@ -223,13 +317,14 @@ def convert(spotify_user_id: str, yt_playlist_id: str, playlist_name: str):
             "playlist_name": playlist_name,
             "playlist_id": playlist["id"],
             "playlist_url": playlist["external_urls"]["spotify"],
-            "total_videos": len(video_titles),
-            "matched_tracks": len(track_uris),
-            "failed_matches": len(failed_matches),
-            "failed_match_titles": failed_matches[:10] if failed_matches else []
+            "total_tracks": len(uris),
+            "matched_tracks": len(uris),
+            "total_videos": len(uris),
+            "failed_matches": 0,
+            "failed_match_titles": []
         }
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error during conversion: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Conversion failed: {str(e)}")
+        logger.error(f"Unexpected error during playlist creation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create playlist: {str(e)}")
