@@ -11,9 +11,9 @@ DASHBOARD_LINK = "https://developer.spotify.com/dashboard/b3ecd97e613e4dc58cfbec
 
 def send_signup_notification(user_email: str, user_name: str = None) -> bool:
     """Send email notification to admin for new user access request"""
-    if not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD:
-        logger.warning("SMTP not configured. Logging request instead.")
-        logger.info(f"Access request: {user_email} ({user_name or 'No name'})")
+    if not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD or \
+       not settings.SMTP_USERNAME.strip() or not settings.SMTP_PASSWORD.strip():
+        logger.info(f"SMTP not configured. Logging access request: {user_email} ({user_name or 'No name'})")
         return False
 
     try:
