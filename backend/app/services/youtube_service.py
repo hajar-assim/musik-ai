@@ -6,7 +6,16 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-youtube = build("youtube", "v3", developerKey=settings.YOUTUBE_API_KEY)
+_youtube = None
+
+def get_youtube_client():
+    """Lazy initialization of YouTube client"""
+    global _youtube
+    if _youtube is None:
+        if not settings.YOUTUBE_API_KEY:
+            raise ValueError("YOUTUBE_API_KEY is required for YouTube playlist conversion")
+        _youtube = build("youtube", "v3", developerKey=settings.YOUTUBE_API_KEY)
+    return _youtube
 
 
 def clean_title(title: str) -> str:
@@ -49,6 +58,7 @@ def get_youtube_playlist_videos(playlist_id: str) -> list[str]:
     if not playlist_id or not playlist_id.strip():
         raise ValueError("playlist_id cannot be empty")
 
+    youtube = get_youtube_client()
     videos = []
     try:
         request = youtube.playlistItems().list(
