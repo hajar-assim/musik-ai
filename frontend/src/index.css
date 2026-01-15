@@ -3,9 +3,10 @@
 /* Font Face */
 @font-face {
   font-family: 'Hoboken Serial';
-  src: url('/fonts/Hoboken-Serial Regular/Hoboken-Serial Regular.ttf') format('truetype');
+  src: url('/fonts/Hoboken-Serial%20Regular/Hoboken-Serial%20Regular.ttf') format('truetype');
   font-weight: 400;
   font-style: normal;
+  font-display: swap;
 }
 
 /* Tailwind v4 Theme Configuration */
@@ -21,5 +22,12 @@
   --color-waikawa: #6677aa;
 
   /* Font Family */
-  --font-family-sans: 'Hoboken Serial', system-ui, -apple-system, sans-serif;
+  --font-family-sans: 'Hoboken Serial', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+/* Global Styles */
+body {
+  font-family: var(--font-family-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }

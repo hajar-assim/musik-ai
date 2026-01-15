@@ -9,11 +9,29 @@ interface ConversionState {
   error?: string;
 }
 
+const PLAYLIST_NAMES = [
+  'DepressingJams123',
+  'MidnightVibes247',
+  'SadBoyHours',
+  'RainyDayAnthems',
+  'ExistentialBops',
+  'MelancholyMix',
+  'ThreeAMThoughts',
+  'EmotionalDamage',
+  'CryingInTheClub',
+  'BigSadEnergy',
+];
+
+const getRandomPlaylistName = () => {
+  return PLAYLIST_NAMES[Math.floor(Math.random() * PLAYLIST_NAMES.length)];
+};
+
 function App() {
   const [spotifyUserId, setSpotifyUserId] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [ytPlaylistId, setYtPlaylistId] = useState('');
   const [playlistName, setPlaylistName] = useState('');
+  const [placeholderName] = useState(getRandomPlaylistName());
   const [conversion, setConversion] = useState<ConversionState>({ status: 'idle' });
 
   // Check for OAuth callback parameters and stored session
@@ -126,7 +144,7 @@ function App() {
                     <img
                       src={userInfo.images[0].url}
                       alt="Profile"
-                      className="w-10 h-10 rounded-full border-2 border-botticelli"
+                      className="w-10 h-10 rounded-full border-2 border-botticelli object-cover"
                     />
                   )}
                   <div className="text-right">
@@ -189,9 +207,6 @@ function App() {
                     className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon placeholder-nepal"
                     required
                   />
-                  <p className="mt-2 text-sm text-nepal">
-                    You can paste the full YouTube URL or just the playlist ID
-                  </p>
                 </div>
 
                 <div>
@@ -203,7 +218,7 @@ function App() {
                     id="playlistName"
                     value={playlistName}
                     onChange={(e) => setPlaylistName(e.target.value)}
-                    placeholder="My Awesome Playlist"
+                    placeholder={placeholderName}
                     className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon placeholder-nepal"
                     required
                   />
