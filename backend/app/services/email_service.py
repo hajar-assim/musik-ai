@@ -1,6 +1,4 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 import logging
 from app.config import settings
 
@@ -10,31 +8,13 @@ DASHBOARD_LINK = "https://developer.spotify.com/dashboard/b3ecd97e613e4dc58cfbec
 
 
 def send_signup_notification(user_email: str, user_name: str = None) -> bool:
-    """Send email notification to admin for new user access request"""
-    if not settings.SMTP_USERNAME or not settings.SMTP_PASSWORD or \
-       not settings.SMTP_USERNAME.strip() or not settings.SMTP_PASSWORD.strip():
-        logger.info(f"SMTP not configured. Logging access request: {user_email} ({user_name or 'No name'})")
+    """Send email notification to admin for new user access request using Resend"""
+    if not settings.RESEND_API_KEY or not settings.RESEND_API_KEY.strip():
+        logger.info(f"Resend API not configured. Logging access request: {user_email} ({user_name or 'No name'})")
         return False
 
     try:
-        msg = MIMEMultipart('alternative')
-        msg['From'] = settings.SMTP_USERNAME
-        msg['To'] = settings.ADMIN_EMAIL
-        msg['Subject'] = f"musik-ai: New User Access Request - {user_email}"
-
-        text_body = f"""
-New User Access Request for musik-ai
-
-User Email: {user_email}
-User Name: {user_name or 'Not provided'}
-
-To add this user to your Spotify app:
-1. Visit: {DASHBOARD_LINK}
-2. Add the user's email: {user_email}
-3. Click 'Add User'
-
-This is an automated message from musik-ai.
-"""
+        resend.api_key = settings.RESEND_API_KEY
 
         html_body = f"""
 <html>
@@ -59,19 +39,20 @@ This is an automated message from musik-ai.
 </html>
 """
 
-        msg.attach(MIMEText(text_body, 'plain'))
-        msg.attach(MIMEText(html_body, 'html'))
-
         logger.info(f"Sending notification to {settings.ADMIN_EMAIL} for {user_email}")
 
-        with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
-            server.starttls()
-            server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-            server.send_message(msg)
+        params = {
+            "from": f"musik-ai <{settings.RESEND_FROM_EMAIL}>",
+            "to": [settings.ADMIN_EMAIL],
+            "subject": f"musik-ai: New User Access Request - {user_email}",
+            "html": html_body,
+        }
 
-        logger.info("✓ Notification sent")
+        email = resend.Emails.send(params)
+        logger.info(f"✓ Notification sent via Resend (ID: {email.get('id')})")
         return True
 
     except Exception as e:
-        logger.error(f"Failed to send notification: {e}")
+        logger.error(f"Failed to send notification via Resend: {e}")
+        logger.info(f"Access request (fallback log): {user_email} ({user_name or 'No name'})")
         return False

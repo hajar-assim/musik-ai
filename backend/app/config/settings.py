@@ -22,10 +22,8 @@ class Settings:
 
     # Email
     ADMIN_EMAIL: str = os.getenv("ADMIN_EMAIL", "hajar.assim@gmail.com")
-    SMTP_SERVER: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
-    SMTP_USERNAME: str = os.getenv("SMTP_USERNAME", "")
-    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+    RESEND_FROM_EMAIL: str = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 
     # Vault (optional)
     VAULT_ADDR: str = os.getenv("VAULT_ADDR", "http://127.0.0.1:8200")
