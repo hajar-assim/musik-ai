@@ -810,29 +810,9 @@ function App() {
                             : "border-nepal bg-cararra hover:border-chambray"
                         }`}
                       >
-                        <div className="flex gap-3">
-                          {track.image && (
-                            <img
-                              src={track.image}
-                              alt={track.name}
-                              className="w-16 h-16 rounded object-cover flex-shrink-0"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-chambray text-sm truncate">
-                              {track.name}
-                            </h3>
-                            <p className="text-falcon text-xs truncate">
-                              {track.artist}
-                            </p>
-                            <p className="text-nepal text-xs truncate mt-1">
-                              {track.album}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between">
+                        <div className="flex gap-3 items-start">
                           <div
-                            className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                            className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
                               isSelected
                                 ? "bg-chambray border-chambray"
                                 : "border-nepal"
@@ -854,18 +834,24 @@ function App() {
                               </svg>
                             )}
                           </div>
-                          {track.preview_url && (
-                            <audio
-                              controls
-                              className="h-8 w-full max-w-[120px]"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <source
-                                src={track.preview_url}
-                                type="audio/mpeg"
-                              />
-                            </audio>
+                          {track.image && (
+                            <img
+                              src={track.image}
+                              alt={track.name}
+                              className="w-16 h-16 rounded object-cover flex-shrink-0"
+                            />
                           )}
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-chambray text-sm truncate">
+                              {track.name}
+                            </h3>
+                            <p className="text-falcon text-xs truncate">
+                              {track.artist}
+                            </p>
+                            <p className="text-nepal text-xs truncate mt-1">
+                              {track.album}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1022,29 +1008,9 @@ function App() {
                                   : "border-nepal bg-cararra hover:border-chambray"
                               }`}
                             >
-                              <div className="flex gap-3">
-                                {track.image && (
-                                  <img
-                                    src={track.image}
-                                    alt={track.name}
-                                    className="w-16 h-16 rounded object-cover flex-shrink-0"
-                                  />
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="font-semibold text-chambray text-sm truncate">
-                                    {track.name}
-                                  </h3>
-                                  <p className="text-falcon text-xs truncate">
-                                    {track.artist}
-                                  </p>
-                                  <p className="text-nepal text-xs truncate mt-1">
-                                    {track.album}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="mt-3 flex items-center justify-between">
+                              <div className="flex gap-3 items-start">
                                 <div
-                                  className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+                                  className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
                                     isSelected
                                       ? "bg-chambray border-chambray"
                                       : "border-nepal"
@@ -1066,18 +1032,24 @@ function App() {
                                     </svg>
                                   )}
                                 </div>
-                                {track.preview_url && (
-                                  <audio
-                                    controls
-                                    className="h-8 w-full max-w-[120px]"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <source
-                                      src={track.preview_url}
-                                      type="audio/mpeg"
-                                    />
-                                  </audio>
+                                {track.image && (
+                                  <img
+                                    src={track.image}
+                                    alt={track.name}
+                                    className="w-16 h-16 rounded object-cover flex-shrink-0"
+                                  />
                                 )}
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-chambray text-sm truncate">
+                                    {track.name}
+                                  </h3>
+                                  <p className="text-falcon text-xs truncate">
+                                    {track.artist}
+                                  </p>
+                                  <p className="text-nepal text-xs truncate mt-1">
+                                    {track.album}
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           );
