@@ -266,7 +266,6 @@ def get_recommendations(spotify_user_id: str, track_uris: str):
                         'artist': ', '.join([a['name'] for a in track['artists']]),
                         'album': track['album']['name'],
                         'image': track['album']['images'][0]['url'] if track['album']['images'] else None,
-                        'preview_url': track.get('preview_url'),
                     })
             except Exception as e:
                 logger.warning(f"Error searching for {rec['name']}: {e}")
@@ -340,7 +339,6 @@ def get_playlist_recommendations(spotify_user_id: str, playlist_id: str):
                         'artist': ', '.join([a['name'] for a in track['artists']]),
                         'album': track['album']['name'],
                         'image': track['album']['images'][0]['url'] if track['album']['images'] else None,
-                        'preview_url': track.get('preview_url'),
                     })
             except Exception as e:
                 logger.warning(f"Error searching for {rec['name']}: {e}")
