@@ -36,6 +36,22 @@ oauth_sessions = {}
 authenticated_users = {}
 
 
+@app.get("/")
+def root():
+    """API root endpoint"""
+    return {
+        "name": "musik-ai API",
+        "version": "1.0.0",
+        "status": "running",
+        "endpoints": {
+            "docs": "/docs",
+            "health": "/",
+            "login": "/login",
+            "callback": "/callback"
+        }
+    }
+
+
 @app.post("/request-access")
 def request_access(email: str, name: str = None):
     """Request access to the app (Spotify dev mode limitation)"""
