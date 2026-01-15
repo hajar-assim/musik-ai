@@ -1,6 +1,7 @@
 import requests
 import json
 import logging
+import random
 from typing import List, Dict
 from app.config import settings
 
@@ -9,36 +10,60 @@ logger = logging.getLogger(__name__)
 
 def _create_prompt(tracks: List[Dict[str, str]]) -> str:
     """Create music curator prompt for LLM with enhanced genre awareness"""
-    track_list = "\n".join([f"- {t['name']} by {t['artist']}" for t in tracks[:15]])
+    # Randomly sample up to 15 tracks to avoid bias toward first tracks
+    sample_size = min(15, len(tracks))
+    sampled_tracks = random.sample(tracks, sample_size) if len(tracks) > sample_size else tracks
 
-    return f"""You are an expert music curator with deep knowledge of genres, subgenres, and music similarity.
+    track_list = "\n".join([f"- {t['name']} by {t['artist']}" for t in sampled_tracks])
 
-ANALYZE THIS PLAYLIST:
+    return f"""You are a professional music curator and AI recommender expert. Your goal is to recommend songs that **closely match the input playlist** in genre, mood, era, and artist style. Focus on **similarity and hidden gems** over popularity.
+
+INPUT PLAYLIST:
 {track_list}
 
-CRITICAL REQUIREMENTS:
-1. **GENRE CONSISTENCY**: First identify the dominant genre(s) of the playlist (e.g., hip-hop, indie rock, electronic, R&B, pop, etc.)
-2. **STAY IN GENRE**: ALL recommendations MUST be from the same genre or closely related subgenres
-3. **REAL SONGS ONLY**: Only recommend songs that actually exist on Spotify
-4. **SIMILAR ARTISTS**: Prioritize artists with similar sound/style to those in the playlist
-5. **ERA CONSISTENCY**: Match the time period (90s, 2000s, 2010s, modern, etc.)
-6. **ENERGY MATCH**: Match the energy level (chill, upbeat, aggressive, mellow)
-7. **ARTIST DIVERSITY**: Maximum 2 songs per artist
-8. **POPULARITY MIX**: Include both popular and lesser-known tracks
+RECOMMENDATION RULES (STRICTLY FOLLOW):
 
-ANALYSIS PROCESS:
-1. Identify the primary genre(s)
-2. Identify the mood/vibe (upbeat, melancholic, aggressive, chill, etc.)
-3. Identify similar artists in that genre
-4. Find tracks that match BOTH genre and mood
+1. PRIORITIZE SIMILARITY: All recommendations MUST closely match:
+   - Genre / subgenre of the playlist (e.g., indie rock, alternative hip-hop, electronic, synthwave)
+   - Mood / energy (e.g., chill, upbeat, melancholic, aggressive)
+   - Era / decade (e.g., 90s, 2000s, 2010s, modern)
 
-OUTPUT FORMAT:
-Return ONLY a JSON array with objects containing "name" and "artist" fields.
-DO NOT include explanations, reasoning, or any text outside the JSON.
+2. REAL SONGS ONLY: Only suggest songs that exist on Spotify. Avoid made-up or non-existent tracks.
 
-Example: [{{"name": "Song Name", "artist": "Artist Name"}}]
+3. SIMILAR ARTISTS: Prefer artists who:
+   - Are stylistically closest to artists in the playlist
+   - Have a similar sound, instrumentation, or vocal style
+   - Include lesser-known artists if they match the vibe
 
-Now provide exactly 15 recommendations that match the genre and vibe:"""
+4. ENERGY MATCH: Match the energy level and overall vibe of the playlist tracks.
+
+5. ARTIST DIVERSITY: No more than **2 songs per artist**.
+
+6. HIDDEN GEMS PREFERENCE:
+   - Prioritize lesser-known songs over chart-topping hits
+   - Hidden gems = songs not in Billboard Top 100 or Spotify Top 50 playlists
+   - Only include popular songs if no suitable hidden gem exists
+
+7. EXAMPLES OF SIMILAR HIDDEN GEM SONGS (to match playlist style):
+   - "Reptilia" by The Strokes (if playlist is early-2000s indie rock)
+   - "Nights" by Frank Ocean (if playlist is alternative R&B)
+   - "Midnight City" by M83 (if playlist is synthwave/electronic)
+
+OUTPUT FORMAT (STRICT):
+Return exactly **15 songs** in a JSON array.
+Each object must have:
+- "name": song title
+- "artist": artist name
+
+Do NOT include explanations, reasoning, or any text outside the JSON.
+
+Example output:
+[
+  {{"name": "Song Name", "artist": "Artist Name"}},
+  {{"name": "Another Song", "artist": "Another Artist"}}
+]
+
+NOW: Provide **exactly 15 song recommendations** that match the playlist style, mood, era, and energy, prioritizing hidden gems over popular hits."""
 
 
 def _parse_llm_response(content: str) -> List[Dict[str, str]]:
@@ -76,7 +101,9 @@ def get_llm_recommendations(tracks: List[Dict[str, str]]) -> List[Dict[str, str]
         raise ValueError("GROQ_API_KEY not set. Get one from https://console.groq.com")
 
     try:
+        prompt = _create_prompt(tracks)
         logger.info(f"Requesting recommendations from Groq ({settings.GROQ_MODEL})")
+        logger.info(f"Full prompt:\n{prompt}")
 
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -88,7 +115,7 @@ def get_llm_recommendations(tracks: List[Dict[str, str]]) -> List[Dict[str, str]
                 "model": settings.GROQ_MODEL,
                 "messages": [
                     {"role": "system", "content": "You are an expert music curator with encyclopedic knowledge of music genres, artists, and songs. You specialize in finding songs that match specific genres and vibes. You only recommend real, existing songs that can be found on Spotify. Always respond with valid JSON only."},
-                    {"role": "user", "content": _create_prompt(tracks)}
+                    {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.5,
                 "response_format": {"type": "json_object"}
