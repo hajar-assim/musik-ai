@@ -1285,7 +1285,7 @@ function App() {
               Request Access
             </h2>
             <p className="text-falcon mb-6 text-sm">
-              This app is in development mode. Submit your email and we'll add
+              This app is in development mode. Submit your Spotify email and we'll add
               you within 24 hours.
             </p>
 
@@ -1330,7 +1330,7 @@ function App() {
                     htmlFor="requestEmail"
                     className="block text-sm font-semibold text-falcon mb-2"
                   >
-                    Email Address *
+                    Spotify Email Address *
                   </label>
                   <input
                     type="email"
@@ -1338,7 +1338,7 @@ function App() {
                     value={accessRequestEmail}
                     onChange={(e) => setAccessRequestEmail(e.target.value)}
                     className="w-full px-4 py-3 border-2 border-botticelli rounded-lg focus:ring-2 focus:ring-chambray focus:border-chambray outline-none transition-all bg-cararra text-falcon"
-                    placeholder="your.email@example.com"
+                    placeholder="your.spotify@email.com"
                     required
                   />
                 </div>
