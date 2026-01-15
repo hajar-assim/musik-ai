@@ -53,6 +53,12 @@ env/
 backend/.cache*
 *.hcl
 
+# Data files (large datasets, models, etc)
+backend/data/
+*.parquet
+*.npy
+*.csv
+
 # Logs
 *.log
 logs/

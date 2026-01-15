@@ -49,7 +49,7 @@ class Settings:
             self.SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
             self.GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 
-            if not all([self.YOUTUBE_API_KEY, self.SPOTIFY_CLIENT_ID, self.SPOTIFY_CLIENT_SECRET]):
-                raise ValueError("Missing required API keys in environment variables")
+            if not all([self.SPOTIFY_CLIENT_ID, self.SPOTIFY_CLIENT_SECRET, self.GROQ_API_KEY]):
+                raise ValueError("Missing required API keys: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, GROQ_API_KEY")
 
 settings = Settings()
