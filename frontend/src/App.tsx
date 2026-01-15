@@ -346,8 +346,7 @@ function App() {
                 welcome to musik-ai
               </h2>
               <p className="text-falcon mb-8 leading-relaxed">
-                Connect your Spotify account to start converting YouTube
-                playlists to Spotify seamlessly
+                Connect Spotify to convert playlists and discover new music with AI recommendations.
               </p>
               <button
                 onClick={handleLogin}
